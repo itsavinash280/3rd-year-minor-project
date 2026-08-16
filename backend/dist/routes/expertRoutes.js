@@ -1,0 +1,11 @@
+import { Router } from 'express';
+import { getConsultations, createConsultation, respondConsultation, getExpertsList, } from '../controllers/expertController.js';
+import { authenticateToken } from '../middleware/authMiddleware.js';
+import { authorizeRoles } from '../middleware/rbacMiddleware.js';
+const router = Router();
+router.get('/list', getExpertsList);
+router.use(authenticateToken);
+router.get('/consultations', getConsultations);
+router.post('/consultations', createConsultation);
+router.put('/consultations/:id/respond', authorizeRoles('EXPERT', 'ADMIN'), respondConsultation);
+export default router;

@@ -1,0 +1,11 @@
+import { Router } from 'express';
+import { getAdminDashboardStats, getUsersAdmin, toggleUserStatus, getComplaints } from '../controllers/adminController.js';
+import { authenticateToken } from '../middleware/authMiddleware.js';
+import { authorizeRoles } from '../middleware/rbacMiddleware.js';
+const router = Router();
+router.use(authenticateToken, authorizeRoles('ADMIN'));
+router.get('/dashboard', getAdminDashboardStats);
+router.get('/users', getUsersAdmin);
+router.put('/users/:id/toggle-status', toggleUserStatus);
+router.get('/complaints', getComplaints);
+export default router;
