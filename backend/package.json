@@ -5,7 +5,7 @@
   "description": "Production-Ready Full-Stack AI Agriculture Platform Backend",
   "main": "dist/server.js",
   "scripts": {
-    "build": "tsc",
+    "build": "node ./node_modules/typescript/bin/tsc",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "seed": "tsx src/utils/seed.ts"
