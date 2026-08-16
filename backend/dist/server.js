@@ -59,10 +59,12 @@ app.use('/api/admin', adminRoutes);
 // Global Error Handler
 app.use(errorHandler);
 // Start Server
-app.listen(PORT, () => {
-    console.log(`=======================================================`);
-    console.log(`[AsraVerse Backend] Server running on http://localhost:${PORT}`);
-    console.log(`[AsraVerse Backend] REST API Endpoints ready for Frontend`);
-    console.log(`=======================================================`);
-});
+if (!process.env.VERCEL) {
+    app.listen(PORT, () => {
+        console.log(`=======================================================`);
+        console.log(`[AsraVerse Backend] Server running on http://localhost:${PORT}`);
+        console.log(`[AsraVerse Backend] REST API Endpoints ready for Frontend`);
+        console.log(`=======================================================`);
+    });
+}
 export default app;
