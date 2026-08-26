@@ -1,0 +1,101 @@
+{
+  "timestamp": "2026-08-26T01:57:01Z",
+  "winner": "efficientnet_b0",
+  "selection_rationale": "Superior accuracy (78.0% vs 64.0%)",
+  "models": {
+    "mobilenet_v3": {
+      "model_name": "mobilenet_v3",
+      "parameters": 4214842,
+      "model_size_mb": 16.27,
+      "train_time_sec": 303.96,
+      "best_val_accuracy": 70.0,
+      "test_accuracy": 64.0,
+      "mean_latency_ms": 90.08,
+      "p95_latency_ms": 110.87,
+      "throughput_fps": 11.1,
+      "history": {
+        "train_loss": [
+          1.9011,
+          0.8493,
+          0.5126,
+          0.4218,
+          0.3256
+        ],
+        "train_acc": [
+          33.33,
+          74.17,
+          77.92,
+          82.08,
+          85.42
+        ],
+        "val_loss": [
+          1.961,
+          1.4869,
+          1.2173,
+          1.0648,
+          0.9887
+        ],
+        "val_acc": [
+          34.0,
+          48.0,
+          62.0,
+          70.0,
+          68.0
+        ]
+      }
+    },
+    "efficientnet_b0": {
+      "model_name": "efficientnet_b0",
+      "parameters": 4020358,
+      "model_size_mb": 15.62,
+      "train_time_sec": 434.72,
+      "best_val_accuracy": 80.0,
+      "test_accuracy": 78.0,
+      "mean_latency_ms": 157.46,
+      "p95_latency_ms": 179.53,
+      "throughput_fps": 6.4,
+      "history": {
+        "train_loss": [
+          1.968,
+          1.3103,
+          0.9486,
+          0.7326,
+          0.7203
+        ],
+        "train_acc": [
+          38.33,
+          64.17,
+          67.5,
+          76.67,
+          77.08
+        ],
+        "val_loss": [
+          1.846,
+          0.9869,
+          0.6908,
+          0.6066,
+          0.5806
+        ],
+        "val_acc": [
+          52.0,
+          76.0,
+          78.0,
+          80.0,
+          80.0
+        ]
+      }
+    }
+  },
+  "dataset_classes": [
+    "corn_common_rust",
+    "corn_healthy",
+    "corn_northern_leaf_blight",
+    "potato_early_blight",
+    "potato_healthy",
+    "potato_late_blight",
+    "rice_brown_spot",
+    "tomato_early_blight",
+    "tomato_healthy",
+    "tomato_late_blight"
+  ]
+}

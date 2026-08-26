@@ -1,0 +1,12 @@
+{
+  "0": "corn_common_rust",
+  "1": "corn_healthy",
+  "2": "corn_northern_leaf_blight",
+  "3": "potato_early_blight",
+  "4": "potato_healthy",
+  "5": "potato_late_blight",
+  "6": "rice_brown_spot",
+  "7": "tomato_early_blight",
+  "8": "tomato_healthy",
+  "9": "tomato_late_blight"
+}
