@@ -104,19 +104,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // fallback
       }
     }
-    const defaultPreset = ROLE_PRESETS.FARMER;
-    return {
-      id: 'demo-farmer-1',
-      name: defaultPreset.name,
-      email: defaultPreset.email,
-      phone: '+91 98765 00100',
-      role: defaultPreset.role,
-      isVerified: true,
-      avatar: defaultPreset.avatar,
-    };
+    return null;
   });
 
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('asraverse_token') || 'demo-jwt-token');
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('asraverse_token') || null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
   useEffect(() => {

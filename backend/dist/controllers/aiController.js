@@ -8,11 +8,12 @@ import { VoiceConversation } from '../models/VoiceConversation.js';
 import { FarmerProfile } from '../models/FarmerProfile.js';
 export const recommendCrops = async (req, res) => {
     try {
-        const { soilType, soilPh, nitrogen, phosphorus, potassium, temperature, rainfall, humidity, season, irrigationMethod, farmSize } = req.body;
+        const { category, soilType, soilPh, nitrogen, phosphorus, potassium, temperature, rainfall, humidity, season, irrigationMethod, farmSize } = req.body;
         const input = {
+            category: category || 'ALL',
             soilType: soilType || 'ALLUVIAL',
             soilPh: soilPh ? Number(soilPh) : 6.8,
-            nitrogen: nitrogen ? Number(nitrogen) : 140,
+            nitrogen: nitrogen ? Number(nitrogen) : 80,
             phosphorus: phosphorus ? Number(phosphorus) : 45,
             potassium: potassium ? Number(potassium) : 40,
             temperature: temperature ? Number(temperature) : 26,
@@ -22,17 +23,19 @@ export const recommendCrops = async (req, res) => {
             irrigationMethod: irrigationMethod || 'CANAL',
             farmSize: farmSize ? Number(farmSize) : 5,
         };
-        const recommendations = CropRecommendationEngine.recommendCrops(input);
+        const { benchmark, recommendations } = CropRecommendationEngine.recommendCrops(input);
         if (req.user) {
             await CropRecommendation.create({
                 farmerId: req.user._id,
+                modelAlgorithm: benchmark.primaryAlgorithm,
                 ...input,
                 recommendations,
             });
         }
         res.status(200).json({
             success: true,
-            message: 'AI Crop Recommendations Generated!',
+            message: 'AI Crop Recommendations Generated (Heliyon 2024 Research Engine)!',
+            benchmark,
             input,
             recommendations,
         });

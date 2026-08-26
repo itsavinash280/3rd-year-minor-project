@@ -105,8 +105,17 @@ export interface Order {
   createdAt: string;
 }
 
+export interface ModelBenchmarkInfo {
+  citation: string;
+  primaryAlgorithm: string;
+  accuracy: string;
+  aucScore: string;
+  categoryMode: string;
+}
+
 export interface RecommendedCropItem {
   cropName: string;
+  category?: 'AGRICULTURAL' | 'HORTICULTURAL';
   suitabilityScore: number;
   expectedYieldPerAcre: string;
   growingDurationDays: number;
@@ -114,6 +123,12 @@ export interface RecommendedCropItem {
   fertilizerGuide: string;
   riskFactor: 'LOW' | 'MEDIUM' | 'HIGH';
   explanation: string;
+  optimalNPK?: {
+    n: number;
+    p: number;
+    k: number;
+    ph: number;
+  };
 }
 
 export interface DiseaseDetectionResult {
@@ -130,6 +145,12 @@ export interface DiseaseDetectionResult {
   prevention: string[];
   disclaimer: string;
   expertEscalationRecommended: boolean;
+  datasetBenchmark?: {
+    dataset: string;
+    totalClasses: number;
+    visionAccuracy: string;
+    modelType: string;
+  };
 }
 
 export interface PriceForecastItem {

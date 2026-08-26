@@ -1,6 +1,8 @@
 import mongoose, { Schema } from 'mongoose';
 const CropRecommendationSchema = new Schema({
     farmerId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    category: { type: String, enum: ['AGRICULTURAL', 'HORTICULTURAL', 'ALL'], default: 'ALL' },
+    modelAlgorithm: { type: String, default: 'XGBoost (Heliyon 2024)' },
     soilType: { type: String, required: true },
     soilPh: { type: Number },
     nitrogen: { type: Number },
@@ -15,6 +17,7 @@ const CropRecommendationSchema = new Schema({
     recommendations: [
         {
             cropName: { type: String, required: true },
+            category: { type: String },
             suitabilityScore: { type: Number, required: true },
             expectedYieldPerAcre: { type: String, required: true },
             growingDurationDays: { type: Number, required: true },
@@ -22,6 +25,12 @@ const CropRecommendationSchema = new Schema({
             fertilizerGuide: { type: String, required: true },
             riskFactor: { type: String, enum: ['LOW', 'MEDIUM', 'HIGH'], default: 'LOW' },
             explanation: { type: String, required: true },
+            optimalNPK: {
+                n: Number,
+                p: Number,
+                k: Number,
+                ph: Number,
+            },
         },
     ],
 }, { timestamps: true });

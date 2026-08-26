@@ -57,6 +57,14 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   );
 };
 
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  return <AppLayout>{children}</AppLayout>;
+};
+
 export const AppContent: React.FC = () => {
   const { user } = useAuth();
 
@@ -68,158 +76,162 @@ export const AppContent: React.FC = () => {
       <Route path="/expert/login" element={<ExpertLoginPage />} />
       <Route path="/transport/login" element={<TransportLoginPage />} />
 
-      {/* Main Pages */}
+      {/* Main Root Landing Route */}
       <Route
         path="/"
         element={
-          <AppLayout>
-            {user?.role === 'BUYER' ? (
-              <BuyerDashboard />
-            ) : user?.role === 'EXPERT' ? (
-              <ExpertDashboard />
-            ) : user?.role === 'TRANSPORT' ? (
-              <TransportDashboard />
-            ) : user?.role === 'ADMIN' ? (
-              <AdminDashboard />
-            ) : (
-              <FarmerDashboard />
-            )}
-          </AppLayout>
+          !user ? (
+            <Navigate to="/login" replace />
+          ) : (
+            <AppLayout>
+              {user.role === 'BUYER' ? (
+                <BuyerDashboard />
+              ) : user.role === 'EXPERT' ? (
+                <ExpertDashboard />
+              ) : user.role === 'TRANSPORT' ? (
+                <TransportDashboard />
+              ) : user.role === 'ADMIN' ? (
+                <AdminDashboard />
+              ) : (
+                <FarmerDashboard />
+              )}
+            </AppLayout>
+          )
         }
       />
 
       <Route
         path="/buyer"
         element={
-          <AppLayout>
+          <ProtectedRoute>
             <BuyerDashboard />
-          </AppLayout>
+          </ProtectedRoute>
         }
       />
 
       <Route
         path="/expert"
         element={
-          <AppLayout>
+          <ProtectedRoute>
             <ExpertDashboard />
-          </AppLayout>
+          </ProtectedRoute>
         }
       />
 
       <Route
         path="/transport"
         element={
-          <AppLayout>
+          <ProtectedRoute>
             <TransportDashboard />
-          </AppLayout>
+          </ProtectedRoute>
         }
       />
 
       <Route
         path="/admin"
         element={
-          <AppLayout>
+          <ProtectedRoute>
             <AdminDashboard />
-          </AppLayout>
+          </ProtectedRoute>
         }
       />
 
       <Route
         path="/crop-recommendation"
         element={
-          <AppLayout>
+          <ProtectedRoute>
             <CropRecommendationPage />
-          </AppLayout>
+          </ProtectedRoute>
         }
       />
 
       <Route
         path="/disease-detection"
         element={
-          <AppLayout>
+          <ProtectedRoute>
             <DiseaseDetectionPage />
-          </AppLayout>
+          </ProtectedRoute>
         }
       />
 
       <Route
         path="/price-prediction"
         element={
-          <AppLayout>
+          <ProtectedRoute>
             <PricePredictionPage />
-          </AppLayout>
+          </ProtectedRoute>
         }
       />
 
       <Route
         path="/marketplace"
         element={
-          <AppLayout>
+          <ProtectedRoute>
             <MarketplacePage />
-          </AppLayout>
+          </ProtectedRoute>
         }
       />
 
       <Route
         path="/cart"
         element={
-          <AppLayout>
+          <ProtectedRoute>
             <CartPage />
-          </AppLayout>
+          </ProtectedRoute>
         }
       />
 
       <Route
         path="/checkout"
         element={
-          <AppLayout>
+          <ProtectedRoute>
             <CheckoutPage />
-          </AppLayout>
+          </ProtectedRoute>
         }
       />
 
       <Route
         path="/orders"
         element={
-          <AppLayout>
+          <ProtectedRoute>
             <OrdersPage />
-          </AppLayout>
+          </ProtectedRoute>
         }
       />
 
       <Route
         path="/schemes"
         element={
-          <AppLayout>
+          <ProtectedRoute>
             <GovernmentSchemesPage />
-          </AppLayout>
+          </ProtectedRoute>
         }
       />
 
       <Route
         path="/weather"
         element={
-          <AppLayout>
+          <ProtectedRoute>
             <WeatherPage />
-          </AppLayout>
+          </ProtectedRoute>
         }
       />
 
       <Route
         path="/expert-consultation"
         element={
-          <AppLayout>
+          <ProtectedRoute>
             <ExpertConsultationPage />
-          </AppLayout>
+          </ProtectedRoute>
         }
       />
 
       <Route
         path="/profile"
         element={
-          <AppLayout>
+          <ProtectedRoute>
             <FarmerProfilePage />
-          </AppLayout>
+          </ProtectedRoute>
         }
       />
 

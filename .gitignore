@@ -39,3 +39,18 @@ Thumbs.db
 # Uploads / Local files
 uploads/
 backend/uploads/
+
+# Python
+__pycache__/
+*/__pycache__/
+*/**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+*.egg-info/
+.pytest_cache/
