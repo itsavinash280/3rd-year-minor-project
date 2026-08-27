@@ -20,17 +20,23 @@ export const RegisterPage: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
 
+  const handleRedirect = (role: UserRole) => {
+    const routes: Record<UserRole, string> = {
+      BUYER: '/buyer',
+      EXPERT: '/expert',
+      TRANSPORT: '/transport',
+      ADMIN: '/admin',
+      FARMER: '/',
+    };
+    navigate(routes[role] || '/');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     const res = await register(formData);
     if (res.success) {
-      const targetRole = res.role || formData.role;
-      if (targetRole === 'BUYER') navigate('/buyer');
-      else if (targetRole === 'EXPERT') navigate('/expert');
-      else if (targetRole === 'TRANSPORT') navigate('/transport');
-      else if (targetRole === 'ADMIN') navigate('/admin');
-      else navigate('/');
+      handleRedirect(res.role || formData.role);
     } else {
       setErrorMsg(res.message || 'Registration failed. User may already exist.');
     }
@@ -42,10 +48,7 @@ export const RegisterPage: React.FC = () => {
     const res = await loginWithGoogle(formData.role);
     setGoogleLoading(false);
     if (res.success) {
-      if (formData.role === 'BUYER') navigate('/buyer');
-      else if (formData.role === 'EXPERT') navigate('/expert');
-      else if (formData.role === 'TRANSPORT') navigate('/transport');
-      else navigate('/');
+      handleRedirect(res.role || formData.role);
     } else {
       setErrorMsg(res.message || 'Google registration failed.');
     }

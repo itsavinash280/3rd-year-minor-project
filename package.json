@@ -12,6 +12,7 @@
     "start": "npm run start --prefix backend"
   },
   "dependencies": {
-    "firebase": "^12.18.0"
+    "firebase": "^12.18.0",
+    "ponytail": "^1.0.57"
   }
 }

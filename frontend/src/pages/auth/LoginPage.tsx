@@ -4,13 +4,17 @@ import { Sprout, Lock, Mail, ArrowRight, ShieldCheck, Eye, EyeOff, Sparkles, Use
 import { useAuth, ROLE_PRESETS } from '../../context/AuthContext';
 import { UserRole } from '../../types';
 
-export const LoginPage: React.FC = () => {
+export interface LoginPageProps {
+  initialRole?: UserRole;
+}
+
+export const LoginPage: React.FC<LoginPageProps> = ({ initialRole = 'FARMER' }) => {
   const { login, loginWithGoogle, isLoading } = useAuth();
   const navigate = useNavigate();
 
-  const [selectedRole, setSelectedRole] = useState<UserRole>('FARMER');
-  const [emailOrPhone, setEmailOrPhone] = useState(ROLE_PRESETS.FARMER.email);
-  const [password, setPassword] = useState(ROLE_PRESETS.FARMER.password);
+  const [selectedRole, setSelectedRole] = useState<UserRole>(initialRole);
+  const [emailOrPhone, setEmailOrPhone] = useState(ROLE_PRESETS[initialRole]?.email || ROLE_PRESETS.FARMER.email);
+  const [password, setPassword] = useState(ROLE_PRESETS[initialRole]?.password || ROLE_PRESETS.FARMER.password);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -24,11 +28,14 @@ export const LoginPage: React.FC = () => {
 
   const handleRedirect = (role?: UserRole) => {
     const targetRole = role || selectedRole;
-    if (targetRole === 'BUYER') navigate('/buyer');
-    else if (targetRole === 'EXPERT') navigate('/expert');
-    else if (targetRole === 'TRANSPORT') navigate('/transport');
-    else if (targetRole === 'ADMIN') navigate('/admin');
-    else navigate('/');
+    const routes: Record<UserRole, string> = {
+      BUYER: '/buyer',
+      EXPERT: '/expert',
+      TRANSPORT: '/transport',
+      ADMIN: '/admin',
+      FARMER: '/',
+    };
+    navigate(routes[targetRole] || '/');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
