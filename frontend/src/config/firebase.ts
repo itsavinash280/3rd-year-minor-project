@@ -13,12 +13,13 @@ import {
 
 // Firebase configuration from Vite environment variables
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'demo-api-key',
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyB8xDbAc6Xk0YqM2vqfN9e8uEW5ykduP3Q',
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'asraverse-ai.firebaseapp.com',
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'asraverse-ai',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'asraverse-ai.appspot.com',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '1234567890',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:1234567890:web:abcdef123456',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'asraverse-ai.firebasestorage.app',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '953571605491',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:953571605491:web:eedee8116678e7a1567086',
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || 'G-EMTL84LGNC',
 };
 
 // Check whether real credentials have been provided
