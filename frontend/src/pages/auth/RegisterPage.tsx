@@ -104,141 +104,61 @@ export const RegisterPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Google Quick Register Button */}
-        <button
-          type="button"
-          onClick={handleGoogleRegister}
-          disabled={googleLoading || isLoading}
-          className="w-full py-2.5 px-4 rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 text-slate-800 dark:text-slate-100 font-semibold text-xs transition flex items-center justify-center gap-3 shadow-sm active:scale-[0.99]"
-        >
-          <svg className="w-4 h-4" viewBox="0 0 24 24">
-            <path
-              fill="#4285F4"
-              d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-            />
-            <path
-              fill="#34A853"
-              d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-            />
-            <path
-              fill="#FBBC05"
-              d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-            />
-            <path
-              fill="#EA4335"
-              d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-            />
-          </svg>
-          <span>{googleLoading ? 'Connecting...' : `Sign Up with Google as ${formData.role}`}</span>
-        </button>
-
-        <div className="relative flex py-1 items-center">
-          <div className="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
-          <span className="flex-shrink mx-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-            or fill details
-          </span>
-          <div className="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-3 text-xs">
-          <div>
-            <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Full Name (पूरा नाम)
-            </label>
-            <div className="flex items-center bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-300 dark:border-slate-700 px-3.5 py-2">
-              <User className="w-4 h-4 text-slate-400 mr-2.5 shrink-0" />
-              <input
-                type="text"
-                required
-                placeholder="e.g. Ramashankar Yadav"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full bg-transparent text-sm text-slate-900 dark:text-white focus:outline-none"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Mobile Number (मोबाइल नंबर)
-            </label>
-            <div className="flex items-center bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-300 dark:border-slate-700 px-3.5 py-2">
-              <Phone className="w-4 h-4 text-slate-400 mr-2.5 shrink-0" />
-              <input
-                type="tel"
-                required
-                placeholder="+91 98765 43210"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full bg-transparent text-sm text-slate-900 dark:text-white focus:outline-none"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Email Address (ईमेल)
-            </label>
-            <div className="flex items-center bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-300 dark:border-slate-700 px-3.5 py-2">
-              <Mail className="w-4 h-4 text-slate-400 mr-2.5 shrink-0" />
-              <input
-                type="email"
-                required
-                placeholder="name@asraverse.in"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full bg-transparent text-sm text-slate-900 dark:text-white focus:outline-none"
-              />
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="font-semibold text-slate-700 dark:text-slate-300">
-                Password (पासवर्ड)
-              </label>
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="text-[11px] text-agro-600 dark:text-agro-400 hover:underline flex items-center gap-1 font-medium"
-              >
-                {showPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                <span>{showPassword ? 'Hide' : 'Show'}</span>
-              </button>
-            </div>
-            <div className="flex items-center bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-300 dark:border-slate-700 px-3.5 py-2">
-              <Lock className="w-4 h-4 text-slate-400 mr-2.5 shrink-0" />
-              <input
-                type={showPassword ? 'text' : 'password'}
-                required
-                placeholder="Create secure password"
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                className="w-full bg-transparent text-sm text-slate-900 dark:text-white focus:outline-none"
-              />
-            </div>
+        {/* Compulsory Google Registration */}
+        <div className="space-y-3 pt-1">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+              <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <span>Step 2: Instant Registration (गूगल से खाता बनाएं)</span>
+            </span>
+            <span className="text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-full">
+              Compulsory
+            </span>
           </div>
 
           <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full mt-2 py-3.5 rounded-2xl bg-gradient-to-r from-agro-600 to-emerald-600 hover:from-agro-700 hover:to-emerald-700 text-white font-bold text-sm shadow-md shadow-agro-600/30 transition flex items-center justify-center gap-2 active:scale-[0.99]"
+            type="button"
+            onClick={handleGoogleRegister}
+            disabled={googleLoading || isLoading}
+            className="w-full py-3.5 px-5 rounded-2xl border-2 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 text-slate-900 dark:text-white font-bold text-sm transition flex items-center justify-center gap-3 shadow-lg shadow-slate-200/50 dark:shadow-none hover:border-agro-500 hover:shadow-agro-500/10 active:scale-[0.99] group"
           >
-            <span>{isLoading ? 'Creating Account...' : `Register as ${formData.role}`}</span>
-            <ArrowRight className="w-4 h-4" />
+            <svg className="w-5 h-5 group-hover:scale-110 transition-transform shrink-0" viewBox="0 0 24 24">
+              <path
+                fill="#4285F4"
+                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+              />
+              <path
+                fill="#34A853"
+                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+              />
+              <path
+                fill="#EA4335"
+                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+              />
+            </svg>
+            <span>
+              {googleLoading ? 'Setting up account...' : `Create Account with Google (as ${formData.role})`}
+            </span>
           </button>
-        </form>
+          <p className="text-[10px] text-center text-slate-500 dark:text-slate-400">
+            🔒 All AsraVerse users must register through Google Cloud OAuth & Firebase KYC Security.
+          </p>
+        </div>
 
-        <div className="text-center text-xs text-slate-500 space-y-2">
+        <div className="text-center text-xs text-slate-500 space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
           <p>
             Already have an account?{' '}
             <Link to="/login" className="font-bold text-agro-600 dark:text-agro-400 hover:underline">
-              Sign in with Role ID
+              Sign In with Google
             </Link>
           </p>
           <div className="flex items-center justify-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400">
             <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Aadhaar privacy & encrypted cloud credentials</span>
+            <span>Google OAuth 2.0 & Firebase Verified Authentication</span>
           </div>
         </div>
       </div>
