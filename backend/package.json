@@ -11,6 +11,7 @@
     "seed": "tsx src/utils/seed.ts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.112.4",
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
@@ -30,6 +31,5 @@
     "tsx": "^4.16.2",
     "typescript": "^5.5.3",
     "zod": "^3.23.8"
-  },
-  "devDependencies": {}
+  }
 }
