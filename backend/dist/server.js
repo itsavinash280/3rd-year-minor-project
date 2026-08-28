@@ -39,11 +39,12 @@ app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 // Static directory for uploaded images
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 // Health Check API
-app.get('/api/health', (req, res) => {
+app.get(['/', '/api', '/api/health'], (req, res) => {
     res.status(200).json({
         status: 'UP',
         system: 'AsraVerse AI Agriculture Platform Backend',
         timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV || (process.env.VERCEL ? 'production-vercel' : 'development'),
     });
 });
 // API Routes Mounting

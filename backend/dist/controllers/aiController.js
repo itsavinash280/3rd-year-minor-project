@@ -6,6 +6,7 @@ import { CropRecommendation } from '../models/CropRecommendation.js';
 import { DiseaseDetection } from '../models/DiseaseDetection.js';
 import { VoiceConversation } from '../models/VoiceConversation.js';
 import { FarmerProfile } from '../models/FarmerProfile.js';
+import { isMongoConnected } from '../config/db.js';
 export const recommendCrops = async (req, res) => {
     try {
         const { category, soilType, soilPh, nitrogen, phosphorus, potassium, temperature, rainfall, humidity, season, irrigationMethod, farmSize } = req.body;
@@ -24,13 +25,18 @@ export const recommendCrops = async (req, res) => {
             farmSize: farmSize ? Number(farmSize) : 5,
         };
         const { benchmark, recommendations } = CropRecommendationEngine.recommendCrops(input);
-        if (req.user) {
-            await CropRecommendation.create({
-                farmerId: req.user._id,
-                modelAlgorithm: benchmark.primaryAlgorithm,
-                ...input,
-                recommendations,
-            });
+        if (req.user && isMongoConnected()) {
+            try {
+                await CropRecommendation.create({
+                    farmerId: req.user._id,
+                    modelAlgorithm: benchmark.primaryAlgorithm,
+                    ...input,
+                    recommendations,
+                });
+            }
+            catch (saveErr) {
+                console.warn('[CropRecommendation Save Notice]:', saveErr);
+            }
         }
         res.status(200).json({
             success: true,
@@ -48,11 +54,19 @@ export const getCropRecommendationHistory = async (req, res) => {
     try {
         if (!req.user)
             return;
-        const history = await CropRecommendation.find({ farmerId: req.user._id }).sort({ createdAt: -1 });
+        let history = [];
+        if (isMongoConnected()) {
+            try {
+                history = await CropRecommendation.find({ farmerId: req.user._id }).sort({ createdAt: -1 });
+            }
+            catch (err) {
+                console.warn('[CropRecommendation History DB Warning]:', err);
+            }
+        }
         res.status(200).json({ success: true, history });
     }
     catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(200).json({ success: true, history: [] });
     }
 };
 export const detectDisease = async (req, res) => {
@@ -61,25 +75,30 @@ export const detectDisease = async (req, res) => {
         const sampleImage = imageUrl || 'https://images.unsplash.com/photo-1592417817098-8f3d6eb19657?auto=format&fit=crop&w=800&q=80';
         const result = DiseaseDetectionEngine.analyzeImage(sampleImage, cropHint);
         let savedRecord = null;
-        if (req.user) {
-            savedRecord = await DiseaseDetection.create({
-                farmerId: req.user._id,
-                imageUrl: sampleImage,
-                cropName: result.cropName,
-                predictedDisease: result.predictedDisease,
-                confidenceScore: result.confidenceScore,
-                severity: result.severity,
-                symptoms: result.symptoms,
-                treatments: result.treatments,
-                prevention: result.prevention,
-                disclaimer: result.disclaimer,
-            });
+        if (req.user && isMongoConnected()) {
+            try {
+                savedRecord = await DiseaseDetection.create({
+                    farmerId: req.user._id,
+                    imageUrl: sampleImage,
+                    cropName: result.cropName,
+                    predictedDisease: result.predictedDisease,
+                    confidenceScore: result.confidenceScore,
+                    severity: result.severity,
+                    symptoms: result.symptoms,
+                    treatments: result.treatments,
+                    prevention: result.prevention,
+                    disclaimer: result.disclaimer,
+                });
+            }
+            catch (saveErr) {
+                console.warn('[DiseaseDetection Save Notice]:', saveErr);
+            }
         }
         res.status(200).json({
             success: true,
             message: 'Leaf Disease Scan Complete!',
             result,
-            recordId: savedRecord?._id,
+            recordId: savedRecord?._id || `scan-${Date.now()}`,
         });
     }
     catch (error) {
@@ -90,11 +109,19 @@ export const getDiseaseHistory = async (req, res) => {
     try {
         if (!req.user)
             return;
-        const history = await DiseaseDetection.find({ farmerId: req.user._id }).sort({ createdAt: -1 });
+        let history = [];
+        if (isMongoConnected()) {
+            try {
+                history = await DiseaseDetection.find({ farmerId: req.user._id }).sort({ createdAt: -1 });
+            }
+            catch (err) {
+                console.warn('[Disease History DB Warning]:', err);
+            }
+        }
         res.status(200).json({ success: true, history });
     }
     catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(200).json({ success: true, history: [] });
     }
 };
 export const predictCropPrice = async (req, res) => {
@@ -118,16 +145,21 @@ export const processVoiceQuery = async (req, res) => {
             return;
         }
         let farmerCtx;
-        if (req.user) {
-            const profile = await FarmerProfile.findOne({ userId: req.user._id });
-            if (profile) {
-                farmerCtx = {
-                    farmName: profile.farmName,
-                    soilType: profile.soilType,
-                    cropsGrown: profile.cropsGrown,
-                    district: profile.district,
-                    state: profile.state,
-                };
+        if (req.user && isMongoConnected()) {
+            try {
+                const profile = await FarmerProfile.findOne({ userId: req.user._id });
+                if (profile) {
+                    farmerCtx = {
+                        farmName: profile.farmName,
+                        soilType: profile.soilType,
+                        cropsGrown: profile.cropsGrown,
+                        district: profile.district,
+                        state: profile.state,
+                    };
+                }
+            }
+            catch (err) {
+                // ignore
             }
         }
         const response = VoiceAssistantEngine.processVoiceQuery({
@@ -135,15 +167,20 @@ export const processVoiceQuery = async (req, res) => {
             language,
             farmerProfileContext: farmerCtx,
         });
-        if (req.user) {
-            await VoiceConversation.create({
-                userId: req.user._id,
-                transcription,
-                detectedIntent: response.detectedIntent,
-                language: response.language,
-                responseText: response.responseText,
-                actionTaken: response.suggestedActions?.[0]?.link,
-            });
+        if (req.user && isMongoConnected()) {
+            try {
+                await VoiceConversation.create({
+                    userId: req.user._id,
+                    transcription,
+                    detectedIntent: response.detectedIntent,
+                    language: response.language,
+                    responseText: response.responseText,
+                    actionTaken: response.suggestedActions?.[0]?.link,
+                });
+            }
+            catch (err) {
+                console.warn('[VoiceConversation Save Notice]:', err);
+            }
         }
         res.status(200).json({
             success: true,
