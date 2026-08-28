@@ -8,6 +8,7 @@ import { Navbar } from './components/layout/Navbar';
 import { Sidebar } from './components/layout/Sidebar';
 import { Footer } from './components/layout/Footer';
 import { VoiceAssistantModal } from './components/voice/VoiceAssistantModal';
+import { ProtectedRoute } from './components/common/ProtectedRoute';
 
 import { FarmerDashboard } from './pages/dashboard/FarmerDashboard';
 import { BuyerDashboard } from './pages/dashboard/BuyerDashboard';
@@ -35,7 +36,7 @@ import { AdminLoginPage } from './pages/auth/AdminLoginPage';
 import { ExpertLoginPage } from './pages/auth/ExpertLoginPage';
 import { TransportLoginPage } from './pages/auth/TransportLoginPage';
 
-const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
@@ -57,54 +58,48 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   );
 };
 
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useAuth();
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-  return <AppLayout>{children}</AppLayout>;
-};
-
 export const AppContent: React.FC = () => {
   const { user } = useAuth();
 
   return (
     <Routes>
+      {/* Public Entry Points */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/admin/login" element={<AdminLoginPage />} />
       <Route path="/expert/login" element={<ExpertLoginPage />} />
       <Route path="/transport/login" element={<TransportLoginPage />} />
 
-      {/* Main Root Landing Route */}
+      {/* Main Root Role-Based Landing Route */}
       <Route
         path="/"
         element={
-          !user ? (
-            <Navigate to="/login" replace />
-          ) : (
+          <ProtectedRoute>
             <AppLayout>
-              {user.role === 'BUYER' ? (
+              {user?.role === 'BUYER' ? (
                 <BuyerDashboard />
-              ) : user.role === 'EXPERT' ? (
+              ) : user?.role === 'EXPERT' ? (
                 <ExpertDashboard />
-              ) : user.role === 'TRANSPORT' ? (
+              ) : user?.role === 'TRANSPORT' ? (
                 <TransportDashboard />
-              ) : user.role === 'ADMIN' ? (
+              ) : user?.role === 'ADMIN' ? (
                 <AdminDashboard />
               ) : (
                 <FarmerDashboard />
               )}
             </AppLayout>
-          )
+          </ProtectedRoute>
         }
       />
 
+      {/* Role-Protected Dashboards */}
       <Route
         path="/buyer"
         element={
-          <ProtectedRoute>
-            <BuyerDashboard />
+          <ProtectedRoute allowedRoles={['BUYER', 'ADMIN']}>
+            <AppLayout>
+              <BuyerDashboard />
+            </AppLayout>
           </ProtectedRoute>
         }
       />
@@ -112,8 +107,10 @@ export const AppContent: React.FC = () => {
       <Route
         path="/expert"
         element={
-          <ProtectedRoute>
-            <ExpertDashboard />
+          <ProtectedRoute allowedRoles={['EXPERT', 'ADMIN']}>
+            <AppLayout>
+              <ExpertDashboard />
+            </AppLayout>
           </ProtectedRoute>
         }
       />
@@ -121,8 +118,10 @@ export const AppContent: React.FC = () => {
       <Route
         path="/transport"
         element={
-          <ProtectedRoute>
-            <TransportDashboard />
+          <ProtectedRoute allowedRoles={['TRANSPORT', 'ADMIN']}>
+            <AppLayout>
+              <TransportDashboard />
+            </AppLayout>
           </ProtectedRoute>
         }
       />
@@ -130,17 +129,22 @@ export const AppContent: React.FC = () => {
       <Route
         path="/admin"
         element={
-          <ProtectedRoute>
-            <AdminDashboard />
+          <ProtectedRoute allowedRoles={['ADMIN']}>
+            <AppLayout>
+              <AdminDashboard />
+            </AppLayout>
           </ProtectedRoute>
         }
       />
 
+      {/* Feature & Advisory Routes */}
       <Route
         path="/crop-recommendation"
         element={
-          <ProtectedRoute>
-            <CropRecommendationPage />
+          <ProtectedRoute allowedRoles={['FARMER', 'EXPERT', 'ADMIN']}>
+            <AppLayout>
+              <CropRecommendationPage />
+            </AppLayout>
           </ProtectedRoute>
         }
       />
@@ -148,8 +152,10 @@ export const AppContent: React.FC = () => {
       <Route
         path="/disease-detection"
         element={
-          <ProtectedRoute>
-            <DiseaseDetectionPage />
+          <ProtectedRoute allowedRoles={['FARMER', 'EXPERT', 'ADMIN']}>
+            <AppLayout>
+              <DiseaseDetectionPage />
+            </AppLayout>
           </ProtectedRoute>
         }
       />
@@ -157,8 +163,10 @@ export const AppContent: React.FC = () => {
       <Route
         path="/price-prediction"
         element={
-          <ProtectedRoute>
-            <PricePredictionPage />
+          <ProtectedRoute allowedRoles={['FARMER', 'BUYER', 'ADMIN']}>
+            <AppLayout>
+              <PricePredictionPage />
+            </AppLayout>
           </ProtectedRoute>
         }
       />
@@ -166,8 +174,10 @@ export const AppContent: React.FC = () => {
       <Route
         path="/marketplace"
         element={
-          <ProtectedRoute>
-            <MarketplacePage />
+          <ProtectedRoute allowedRoles={['FARMER', 'BUYER', 'ADMIN']}>
+            <AppLayout>
+              <MarketplacePage />
+            </AppLayout>
           </ProtectedRoute>
         }
       />
@@ -175,8 +185,10 @@ export const AppContent: React.FC = () => {
       <Route
         path="/cart"
         element={
-          <ProtectedRoute>
-            <CartPage />
+          <ProtectedRoute allowedRoles={['FARMER', 'BUYER', 'ADMIN']}>
+            <AppLayout>
+              <CartPage />
+            </AppLayout>
           </ProtectedRoute>
         }
       />
@@ -184,8 +196,10 @@ export const AppContent: React.FC = () => {
       <Route
         path="/checkout"
         element={
-          <ProtectedRoute>
-            <CheckoutPage />
+          <ProtectedRoute allowedRoles={['BUYER', 'FARMER', 'ADMIN']}>
+            <AppLayout>
+              <CheckoutPage />
+            </AppLayout>
           </ProtectedRoute>
         }
       />
@@ -193,8 +207,10 @@ export const AppContent: React.FC = () => {
       <Route
         path="/orders"
         element={
-          <ProtectedRoute>
-            <OrdersPage />
+          <ProtectedRoute allowedRoles={['FARMER', 'BUYER', 'TRANSPORT', 'ADMIN']}>
+            <AppLayout>
+              <OrdersPage />
+            </AppLayout>
           </ProtectedRoute>
         }
       />
@@ -202,8 +218,10 @@ export const AppContent: React.FC = () => {
       <Route
         path="/schemes"
         element={
-          <ProtectedRoute>
-            <GovernmentSchemesPage />
+          <ProtectedRoute allowedRoles={['FARMER', 'BUYER', 'EXPERT', 'ADMIN']}>
+            <AppLayout>
+              <GovernmentSchemesPage />
+            </AppLayout>
           </ProtectedRoute>
         }
       />
@@ -211,8 +229,10 @@ export const AppContent: React.FC = () => {
       <Route
         path="/weather"
         element={
-          <ProtectedRoute>
-            <WeatherPage />
+          <ProtectedRoute allowedRoles={['FARMER', 'BUYER', 'EXPERT', 'TRANSPORT', 'ADMIN']}>
+            <AppLayout>
+              <WeatherPage />
+            </AppLayout>
           </ProtectedRoute>
         }
       />
@@ -220,8 +240,10 @@ export const AppContent: React.FC = () => {
       <Route
         path="/expert-consultation"
         element={
-          <ProtectedRoute>
-            <ExpertConsultationPage />
+          <ProtectedRoute allowedRoles={['FARMER', 'EXPERT', 'ADMIN']}>
+            <AppLayout>
+              <ExpertConsultationPage />
+            </AppLayout>
           </ProtectedRoute>
         }
       />
@@ -229,8 +251,10 @@ export const AppContent: React.FC = () => {
       <Route
         path="/profile"
         element={
-          <ProtectedRoute>
-            <FarmerProfilePage />
+          <ProtectedRoute allowedRoles={['FARMER', 'ADMIN']}>
+            <AppLayout>
+              <FarmerProfilePage />
+            </AppLayout>
           </ProtectedRoute>
         }
       />

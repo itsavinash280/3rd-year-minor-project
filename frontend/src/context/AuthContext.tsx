@@ -4,292 +4,289 @@ import { apiRequest } from '../api/client';
 import {
   auth,
   googleProvider,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
   signInWithPopup,
   signOut,
-  isFirebaseConfigured,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  FirebaseUser,
 } from '../config/firebase';
 
-export interface RolePreset {
+export interface RoleInfo {
   role: UserRole;
   title: string;
-  name: string;
-  email: string;
-  password: string;
+  titleHi: string;
   badge: string;
-  avatar: string;
   description: string;
+  icon: string;
 }
 
-export const ROLE_PRESETS: Record<UserRole, RolePreset> = {
-  FARMER: {
+export const AVAILABLE_ROLES: RoleInfo[] = [
+  {
     role: 'FARMER',
-    title: 'Farmer (किसान)',
-    name: 'Ramashankar Yadav',
-    email: 'farmer1@asraverse.in',
-    password: 'Farmer@2026',
-    badge: 'Kisan Verified',
-    avatar: 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=150&q=80',
-    description: 'Crop Recommendation, Disease Scan, Fasal Marketplace & Weather',
+    title: 'Farmer',
+    titleHi: 'किसान',
+    badge: 'Crop AI & Mandi',
+    description: 'AI Crop Recommendation, Plant Disease Scan, Fasal Marketplace & Weather Forecasts',
+    icon: '🌾',
   },
-  BUYER: {
+  {
     role: 'BUYER',
-    title: 'Wholesale Buyer (थोक खरीदार)',
-    name: 'Organic Harvest Wholesalers',
-    email: 'buyer@asraverse.in',
-    password: 'Buyer@2026',
-    badge: 'GST Registered',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80',
-    description: 'Bulk Produce Procurement, Mandi Bidding & Escrow Orders',
+    title: 'Wholesale Buyer',
+    titleHi: 'थोक खरीदार',
+    badge: 'Direct Procurement',
+    description: 'Direct Mandi Farmer Procurement, Bulk Escrow Orders & Quality Certified Produce',
+    icon: '🛒',
   },
-  EXPERT: {
+  {
     role: 'EXPERT',
-    title: 'Agri Expert (कृषि विशेषज्ञ)',
-    name: 'Dr. Anita Verma (KVK Agronomist)',
-    email: 'expert@asraverse.in',
-    password: 'Expert@2026',
-    badge: 'ICAR Certified',
-    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=150&q=80',
-    description: 'Farmer Disease Diagnosis Consultations & Scientific Prescriptions',
+    title: 'KVK Agri Expert',
+    titleHi: 'कृषि विशेषज्ञ',
+    badge: 'ICAR / KVK Certified',
+    description: 'Provide Farmer Disease Diagnostic Consultations & Issue Scientific Prescriptions',
+    icon: '🔬',
   },
-  TRANSPORT: {
+  {
     role: 'TRANSPORT',
-    title: 'Logistics Partner (माल ढुलाई)',
-    name: 'Kisaan Express Logistics',
-    email: 'transport@asraverse.in',
-    password: 'Transport@2026',
-    badge: 'Fleet Verified',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&q=80',
-    description: 'Truck Dispatch, Mandi Pickup Coordination & Route Tracking',
+    title: 'Logistics Partner',
+    titleHi: 'माल ढुलाई',
+    badge: 'Fleet & Dispatch',
+    description: 'Farm-to-Mandi Logistics Coordination, Truck Scheduling & Route Fleet Tracking',
+    icon: '🚚',
   },
-  ADMIN: {
-    role: 'ADMIN',
-    title: 'Platform Admin (सिस्टम डायरेक्टर)',
-    name: 'Dr. Ramesh Sharma (Platform Director)',
-    email: 'admin@asraverse.in',
-    password: 'Admin@2026',
-    badge: 'Super Admin',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
-    description: 'System Oversight, User Moderation, AI Model Metrics & Analytics',
-  },
-};
+];
 
-interface AuthResponse {
+export interface PendingUser {
+  uid: string;
+  email: string;
+  name: string;
+  avatar: string;
+  idToken: string;
+}
+
+export interface AuthResponse {
   success: boolean;
   message?: string;
+  isNewUser?: boolean;
   role?: UserRole;
+  user?: User;
 }
 
 interface AuthContextType {
   user: User | null;
+  firebaseUser: FirebaseUser | null;
+  pendingFirebaseUser: PendingUser | null;
   token: string | null;
   isLoading: boolean;
-  login: (emailOrPhone: string, pass: string) => Promise<AuthResponse>;
-  loginWithGoogle: (role?: UserRole) => Promise<AuthResponse>;
+  loginWithGoogle: () => Promise<AuthResponse>;
+  selectRole: (role: UserRole, details?: { name?: string; phone?: string; avatar?: string }) => Promise<AuthResponse>;
+  login: (email: string, pass: string) => Promise<AuthResponse>;
   register: (data: any) => Promise<AuthResponse>;
   logout: () => Promise<void>;
-  switchDemoRole: (role: UserRole) => void;
+  clearPendingUser: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('asraverse_user');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        // fallback
-      }
-    }
-    return null;
-  });
-
+  const [user, setUser] = useState<User | null>(null);
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [pendingFirebaseUser, setPendingFirebaseUser] = useState<PendingUser | null>(null);
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('asraverse_token') || null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
+  // 1. Firebase Auth State Listener (Source of Truth)
   useEffect(() => {
-    if (token && token !== 'demo-jwt-token') {
-      apiRequest('/auth/me').then((res) => {
-        if (res.success && res.user) {
-          setUser(res.user);
-          localStorage.setItem('asraverse_user', JSON.stringify(res.user));
-        }
-      });
-    }
-  }, [token]);
+    let isMounted = true;
 
-  const saveAuthSession = (newUser: User, newToken: string) => {
-    setUser(newUser);
-    setToken(newToken);
-    localStorage.setItem('asraverse_user', JSON.stringify(newUser));
-    localStorage.setItem('asraverse_token', newToken);
-  };
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      if (!isMounted) return;
 
-  // 1. Email / Password Login (Firebase + Backend / Smart Preset Fallback)
-  const login = async (emailOrPhone: string, pass: string): Promise<AuthResponse> => {
-    setIsLoading(true);
-    const cleanEmail = emailOrPhone.trim().toLowerCase();
+      if (!fbUser) {
+        // Unauthenticated
+        setUser(null);
+        setFirebaseUser(null);
+        setPendingFirebaseUser(null);
+        setToken(null);
+        localStorage.removeItem('asraverse_token');
+        localStorage.removeItem('asraverse_user');
+        setIsLoading(false);
+        return;
+      }
 
-    // Check if matching any of the 5 Role Presets
-    const matchedPreset = Object.values(ROLE_PRESETS).find(
-      (p) =>
-        p.email.toLowerCase() === cleanEmail ||
-        (cleanEmail.includes('farmer') && p.role === 'FARMER') ||
-        (cleanEmail.includes('buyer') && p.role === 'BUYER') ||
-        (cleanEmail.includes('expert') && p.role === 'EXPERT') ||
-        (cleanEmail.includes('transport') && p.role === 'TRANSPORT') ||
-        (cleanEmail.includes('admin') && p.role === 'ADMIN')
-    );
+      setFirebaseUser(fbUser);
 
-    // If Firebase configured, attempt Firebase Auth
-    if (isFirebaseConfigured && auth) {
       try {
-        const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, pass);
-        const firebaseIdToken = await userCredential.user.getIdToken();
+        const idToken = await fbUser.getIdToken();
 
-        // Send to backend verification
+        // Check user record with backend
         const backendRes = await apiRequest('/auth/firebase-login', {
           method: 'POST',
-          body: JSON.stringify({ idToken: firebaseIdToken }),
+          body: JSON.stringify({ idToken }),
         });
 
-        if (backendRes.success && backendRes.user) {
-          saveAuthSession(backendRes.user, backendRes.token);
-          setIsLoading(false);
-          return { success: true, role: backendRes.user.role };
+        if (!isMounted) return;
+
+        if (backendRes.success && !backendRes.isNewUser && backendRes.user) {
+          // Existing registered user
+          setUser(backendRes.user);
+          setToken(backendRes.token || idToken);
+          setPendingFirebaseUser(null);
+          localStorage.setItem('asraverse_token', backendRes.token || idToken);
+        } else if (backendRes.success && backendRes.isNewUser) {
+          // New authenticated user needing role selection
+          setUser(null);
+          setPendingFirebaseUser({
+            uid: fbUser.uid,
+            email: fbUser.email || `${fbUser.uid}@asraverse.in`,
+            name: fbUser.displayName || 'Google User',
+            avatar: fbUser.photoURL || '',
+            idToken,
+          });
         }
-      } catch (fbErr: any) {
-        console.warn('[Firebase Login Attempt]:', fbErr.message);
-        // If live Firebase fails, check backend or fallback
+      } catch (err) {
+        console.error('[Firebase Auth State Sync Error]:', err);
+      } finally {
+        if (isMounted) setIsLoading(false);
       }
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, []);
+
+  // 2. Real Firebase Google Sign-In
+  const loginWithGoogle = async (): Promise<AuthResponse> => {
+    setIsLoading(true);
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const fbUser = result.user;
+      setFirebaseUser(fbUser);
+
+      const idToken = await fbUser.getIdToken(true);
+
+      // Verify with backend
+      const backendRes = await apiRequest('/auth/firebase-login', {
+        method: 'POST',
+        body: JSON.stringify({ idToken }),
+      });
+
+      if (backendRes.success && !backendRes.isNewUser && backendRes.user) {
+        // Existing user with saved role
+        setUser(backendRes.user);
+        setToken(backendRes.token || idToken);
+        setPendingFirebaseUser(null);
+        localStorage.setItem('asraverse_token', backendRes.token || idToken);
+        setIsLoading(false);
+        return { success: true, isNewUser: false, role: backendRes.user.role, user: backendRes.user };
+      }
+
+      if (backendRes.success && backendRes.isNewUser) {
+        // New user -> Trigger role selection step
+        const pending: PendingUser = {
+          uid: fbUser.uid,
+          email: fbUser.email || `${fbUser.uid}@asraverse.in`,
+          name: fbUser.displayName || 'Google User',
+          avatar: fbUser.photoURL || '',
+          idToken,
+        };
+        setUser(null);
+        setPendingFirebaseUser(pending);
+        setIsLoading(false);
+        return { success: true, isNewUser: true, message: 'Please choose your account role to complete registration.' };
+      }
+
+      setIsLoading(false);
+      return { success: false, message: backendRes.message || 'Failed to authenticate with backend.' };
+    } catch (error: any) {
+      setIsLoading(false);
+      console.error('[Google Sign-In Error]:', error);
+      return {
+        success: false,
+        message: error.message || 'Google sign-in was cancelled or failed. Please try again.',
+      };
+    }
+  };
+
+  // 3. Role Selection & Backend Profile Creation (for New Users)
+  const selectRole = async (
+    role: UserRole,
+    details?: { name?: string; phone?: string; avatar?: string }
+  ): Promise<AuthResponse> => {
+    if (!firebaseUser && !pendingFirebaseUser) {
+      return { success: false, message: 'Google authentication required before selecting a role.' };
     }
 
-    // Try standard Backend REST API
+    if (role === 'ADMIN') {
+      return { success: false, message: 'Security restriction: Admin role cannot be self-assigned.' };
+    }
+
+    setIsLoading(true);
     try {
-      const res = await apiRequest('/auth/login', {
+      const idToken = (await firebaseUser?.getIdToken()) || pendingFirebaseUser?.idToken;
+      if (!idToken) {
+        setIsLoading(false);
+        return { success: false, message: 'Session expired. Please log in with Google again.' };
+      }
+
+      const res = await apiRequest('/auth/register-role', {
         method: 'POST',
-        body: JSON.stringify({ emailOrPhone: cleanEmail, password: pass }),
+        body: JSON.stringify({
+          idToken,
+          role,
+          name: details?.name || pendingFirebaseUser?.name || firebaseUser?.displayName,
+          phone: details?.phone || '',
+          avatar: details?.avatar || pendingFirebaseUser?.avatar || firebaseUser?.photoURL,
+        }),
       });
 
       if (res.success && res.user) {
-        saveAuthSession(res.user, res.token);
+        setUser(res.user);
+        setToken(res.token || idToken);
+        setPendingFirebaseUser(null);
+        localStorage.setItem('asraverse_token', res.token || idToken);
         setIsLoading(false);
-        return { success: true, role: res.user.role };
+        return { success: true, role: res.user.role, user: res.user };
       }
-    } catch (apiErr) {
-      console.warn('[Backend Login Attempt]:', apiErr);
-    }
 
-    // Fallback: Smart Preset Authentication for seamless offline/demo testing
-    if (matchedPreset) {
-      const fallbackUser: User = {
-        id: `user-${matchedPreset.role.toLowerCase()}-1`,
-        name: matchedPreset.name,
-        email: matchedPreset.email,
-        phone: '+91 98765 00001',
-        role: matchedPreset.role,
-        isVerified: true,
-        avatar: matchedPreset.avatar,
-      };
-      saveAuthSession(fallbackUser, `demo-token-${matchedPreset.role.toLowerCase()}`);
       setIsLoading(false);
-      return { success: true, role: matchedPreset.role };
+      return { success: false, message: res.message || 'Failed to save role and create profile.' };
+    } catch (error: any) {
+      setIsLoading(false);
+      return { success: false, message: error.message || 'Network error while saving role.' };
     }
-
-    setIsLoading(false);
-    return {
-      success: false,
-      message: 'Invalid credentials. Please select one of the 5 Role Presets or enter correct details.',
-    };
   };
 
-  // 2. Google Sign-In (Firebase Popup + Backend Session)
-  const loginWithGoogle = async (preferredRole: UserRole = 'FARMER'): Promise<AuthResponse> => {
+  // 4. Standard Email/Password Login
+  const login = async (email: string, pass: string): Promise<AuthResponse> => {
     setIsLoading(true);
+    try {
+      const res = await apiRequest('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ emailOrPhone: email, password: pass }),
+      });
 
-    if (isFirebaseConfigured && auth) {
-      try {
-        const result = await signInWithPopup(auth, googleProvider);
-        const fbUser = result.user;
-        const idToken = await fbUser.getIdToken();
-
-        // Sync with backend
-        const backendRes = await apiRequest('/auth/firebase-login', {
-          method: 'POST',
-          body: JSON.stringify({ idToken, defaultRole: preferredRole }),
-        });
-
-        if (backendRes.success && backendRes.user) {
-          saveAuthSession(backendRes.user, backendRes.token);
-          setIsLoading(false);
-          return { success: true, role: backendRes.user.role };
-        }
-
-        // Direct fallback from Firebase user
-        const gUser: User = {
-          id: fbUser.uid,
-          name: fbUser.displayName || 'Google User',
-          email: fbUser.email || `${fbUser.uid}@asraverse.in`,
-          phone: fbUser.phoneNumber || '+91 98765 00000',
-          role: preferredRole,
-          isVerified: true,
-          avatar: fbUser.photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
-        };
-        saveAuthSession(gUser, idToken);
+      if (res.success && res.user) {
+        setUser(res.user);
+        setToken(res.token);
+        localStorage.setItem('asraverse_token', res.token);
         setIsLoading(false);
-        return { success: true, role: preferredRole };
-      } catch (error: any) {
-        console.error('[Google Sign-In Error]:', error);
-        setIsLoading(false);
-        return {
-          success: false,
-          message: error.message || 'Google Sign-In was cancelled or failed.',
-        };
+        return { success: true, role: res.user.role, user: res.user };
       }
-    } else {
-      // Demo Google Mock Login
-      const gUser: User = {
-        id: 'google-demo-user-1',
-        name: 'Google Verified Kisan',
-        email: 'google.kisan@asraverse.in',
-        phone: '+91 98765 12345',
-        role: preferredRole,
-        isVerified: true,
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
-      };
-      saveAuthSession(gUser, 'demo-google-jwt-token');
+
       setIsLoading(false);
-      return { success: true, role: preferredRole };
+      return { success: false, message: res.message || 'Invalid email or password.' };
+    } catch (e: any) {
+      setIsLoading(false);
+      return { success: false, message: e.message || 'Login failed.' };
     }
   };
 
-  // 3. Register New Account (Firebase + Backend)
+  // 5. Standard Email/Password Registration
   const register = async (data: any): Promise<AuthResponse> => {
     setIsLoading(true);
-
-    if (isFirebaseConfigured && auth && data.email && data.password) {
-      try {
-        const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
-        const idToken = await userCredential.user.getIdToken();
-
-        const res = await apiRequest('/auth/register', {
-          method: 'POST',
-          body: JSON.stringify({ ...data, firebaseUid: userCredential.user.uid, idToken }),
-        });
-
-        if (res.success && res.user) {
-          saveAuthSession(res.user, res.token || idToken);
-          setIsLoading(false);
-          return { success: true, role: res.user.role };
-        }
-      } catch (fbErr: any) {
-        console.warn('[Firebase Register]:', fbErr.message);
-      }
-    }
-
     try {
       const res = await apiRequest('/auth/register', {
         method: 'POST',
@@ -297,71 +294,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (res.success && res.user) {
-        saveAuthSession(res.user, res.token);
+        setUser(res.user);
+        setToken(res.token);
+        localStorage.setItem('asraverse_token', res.token);
         setIsLoading(false);
-        return { success: true, role: res.user.role };
+        return { success: true, role: res.user.role, user: res.user };
       }
-    } catch (e) {
-      console.warn('[Backend Register]:', e);
-    }
 
-    // Local Fallback Register
-    const newUser: User = {
-      id: `user-${Date.now()}`,
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
-      role: data.role || 'FARMER',
-      isVerified: true,
-      avatar: 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=150&q=80',
-    };
-    saveAuthSession(newUser, `token-${Date.now()}`);
-    setIsLoading(false);
-    return { success: true, role: newUser.role };
+      setIsLoading(false);
+      return { success: false, message: res.message || 'Registration failed.' };
+    } catch (e: any) {
+      setIsLoading(false);
+      return { success: false, message: e.message || 'Registration failed.' };
+    }
   };
 
-  // 4. Logout
+  // 6. Sign Out
   const logout = async () => {
     try {
       if (auth) {
         await signOut(auth);
       }
-    } catch (e) {
-      // ignore
+    } catch (err) {
+      console.warn('[SignOut Warning]:', err);
     }
     setUser(null);
+    setFirebaseUser(null);
+    setPendingFirebaseUser(null);
     setToken(null);
-    localStorage.removeItem('asraverse_user');
     localStorage.removeItem('asraverse_token');
+    localStorage.removeItem('asraverse_user');
   };
 
-  // 5. Quick Role Switcher
-  const switchDemoRole = (role: UserRole) => {
-    const preset = ROLE_PRESETS[role];
-    const newUser: User = {
-      id: `demo-${role.toLowerCase()}-1`,
-      name: preset.name,
-      email: preset.email,
-      phone: '+91 98765 00100',
-      role: preset.role,
-      isVerified: true,
-      avatar: preset.avatar,
-    };
-    setUser(newUser);
-    localStorage.setItem('asraverse_user', JSON.stringify(newUser));
+  const clearPendingUser = () => {
+    setPendingFirebaseUser(null);
   };
 
   return (
     <AuthContext.Provider
       value={{
         user,
+        firebaseUser,
+        pendingFirebaseUser,
         token,
         isLoading,
-        login,
         loginWithGoogle,
+        selectRole,
+        login,
         register,
         logout,
-        switchDemoRole,
+        clearPendingUser,
       }}
     >
       {children}
@@ -374,3 +356,4 @@ export const useAuth = () => {
   if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
   return ctx;
 };
+

@@ -11,7 +11,7 @@ import {
   Auth,
 } from 'firebase/auth';
 
-// Firebase configuration from Vite environment variables
+// Firebase configuration for AsraVerse AI
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyB8xDbAc6Xk0YqM2vqfN9e8uEW5ykduP3Q',
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'asraverse-ai.firebaseapp.com',
@@ -22,9 +22,8 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || 'G-EMTL84LGNC',
 };
 
-// Check whether real credentials have been provided
 export const isFirebaseConfigured = Boolean(
-  import.meta.env.VITE_FIREBASE_API_KEY && import.meta.env.VITE_FIREBASE_API_KEY !== 'demo-api-key'
+  firebaseConfig.apiKey && firebaseConfig.apiKey !== 'demo-api-key'
 );
 
 let app: FirebaseApp;
@@ -34,9 +33,8 @@ try {
   app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
   auth = getAuth(app);
 } catch (error) {
-  console.warn('[Firebase] Initialized in fallback demo mode:', error);
-  // Re-init with safe defaults
-  app = initializeApp(firebaseConfig, 'asraverse-fallback');
+  console.warn('[Firebase Client Initialized with Fallback]:', error);
+  app = initializeApp(firebaseConfig, 'asraverse-app');
   auth = getAuth(app);
 }
 
@@ -54,3 +52,4 @@ export {
   onAuthStateChanged,
 };
 export type { FirebaseUser };
+

@@ -5,6 +5,7 @@ import {
   loginUser,
   googleAuth,
   firebaseAuthLogin,
+  registerRole,
   getMe,
   getSessions,
   revokeSession,
@@ -18,9 +19,11 @@ router.post('/verify-otp', verifyOtp);
 router.post('/login', loginUser);
 router.post('/google', googleAuth);
 router.post('/firebase-login', firebaseAuthLogin);
+router.post('/register-role', registerRole);
 
 router.get('/me', authenticateToken, getMe);
 router.get('/sessions', authenticateToken, getSessions);
 router.delete('/sessions/:sessionId', authenticateToken, revokeSession);
 
 export default router;
+

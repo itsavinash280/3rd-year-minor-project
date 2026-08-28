@@ -1,8 +1,9 @@
 import mongoose, { Schema } from 'mongoose';
 const UserSchema = new Schema({
+    firebaseUid: { type: String, sparse: true, index: true },
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-    phone: { type: String, required: true, unique: true, trim: true },
+    phone: { type: String, sparse: true, trim: true },
     password: { type: String },
     role: {
         type: String,
@@ -23,5 +24,6 @@ const UserSchema = new Schema({
         },
     ],
 }, { timestamps: true });
-UserSchema.index({ email: 1, phone: 1, role: 1 });
+UserSchema.index({ email: 1, role: 1 });
+UserSchema.index({ firebaseUid: 1 });
 export const User = mongoose.model('User', UserSchema);

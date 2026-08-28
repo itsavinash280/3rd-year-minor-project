@@ -5,9 +5,10 @@ export const SupabaseService = {
   async syncUser(userData: {
     name: string;
     email: string;
-    phone: string;
+    phone?: string;
     role: string;
     googleId?: string;
+    firebaseUid?: string;
     avatar?: string;
   }) {
     const { data, error } = await supabaseAdmin
@@ -16,9 +17,9 @@ export const SupabaseService = {
         {
           name: userData.name,
           email: userData.email,
-          phone: userData.phone,
+          phone: userData.phone || '+91 00000 00000',
           role: userData.role,
-          google_id: userData.googleId,
+          google_id: userData.googleId || userData.firebaseUid,
           avatar: userData.avatar,
         },
         { onConflict: 'email' }

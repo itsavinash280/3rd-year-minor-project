@@ -20,7 +20,7 @@ import { useVoiceAssistant } from '../../context/VoiceAssistantContext';
 import { UserRole } from '../../types';
 
 export const Navbar: React.FC<{ toggleSidebar: () => void }> = ({ toggleSidebar }) => {
-  const { user, logout, switchDemoRole } = useAuth();
+  const { user, logout } = useAuth();
   const { cartCount } = useCart();
   const { openVoiceAssistant, isSpeaking } = useVoiceAssistant();
   const navigate = useNavigate();

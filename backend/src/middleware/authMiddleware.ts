@@ -1,9 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { User, IUser, UserRole } from '../models/User.js';
+import { isMongoConnected } from '../config/db.js';
+import { inMemoryUsers, getInMemoryUser } from '../controllers/authController.js';
+import { verifyFirebaseToken } from '../config/firebaseAdmin.js';
 
 export interface AuthRequest extends Request {
-  user?: IUser;
+  user?: any;
 }
 
 export const authenticateToken = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
@@ -15,20 +18,80 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
     return;
   }
 
+  // Reject any synthetic/demo bypass tokens
+  if (token.startsWith('demo-') || token.startsWith('token-')) {
+    res.status(401).json({ success: false, message: 'Unauthorized. Demo and bypass tokens are not permitted.' });
+    return;
+  }
+
   try {
     const secret = process.env.JWT_SECRET || 'asraverse_super_secret_jwt_key_2026_safe';
-    const decoded = jwt.verify(token, secret) as { id: string; role: UserRole };
-    
-    const user = await User.findById(decoded.id).select('-password');
-    if (!user) {
-      res.status(401).json({ success: false, message: 'User session invalid or expired.' });
+    let decodedUser: any = null;
+
+    // 1. Attempt Backend Session JWT verification
+    try {
+      decodedUser = jwt.verify(token, secret) as any;
+    } catch (jwtErr) {
+      // 2. If not a backend JWT, attempt Firebase ID Token verification
+      const fbVerified = await verifyFirebaseToken(token);
+      if (fbVerified) {
+        decodedUser = {
+          firebaseUid: fbVerified.uid,
+          email: fbVerified.email,
+          name: fbVerified.name,
+        };
+      }
+    }
+
+    if (!decodedUser) {
+      res.status(401).json({ success: false, message: 'Invalid or expired authentication token.' });
       return;
     }
 
-    req.user = user;
+    const userId = decodedUser.id || decodedUser._id || decodedUser.sub;
+    const firebaseUid = decodedUser.firebaseUid;
+    const userEmail = decodedUser.email?.toLowerCase().trim();
+
+    let dbUser: any = null;
+
+    // Lookup user in MongoDB
+    if (isMongoConnected()) {
+      try {
+        const query: any[] = [];
+        if (userId) query.push({ _id: userId });
+        if (firebaseUid) query.push({ firebaseUid });
+        if (userEmail) query.push({ email: userEmail });
+
+        if (query.length > 0) {
+          dbUser = await User.findOne({ $or: query }).select('-password');
+        }
+      } catch (dbErr) {
+        console.warn('[MongoDB Auth Lookup Notice]:', dbErr);
+      }
+    }
+
+    // Lookup user in in-memory registry
+    if (!dbUser) {
+      if (firebaseUid) dbUser = getInMemoryUser(firebaseUid);
+      if (!dbUser && userEmail) dbUser = getInMemoryUser(userEmail);
+      if (!dbUser && userId) dbUser = getInMemoryUser(userId);
+    }
+
+    if (!dbUser) {
+      res.status(401).json({
+        success: false,
+        message: 'Authenticated identity has no associated user profile in database. Please complete registration.',
+      });
+      return;
+    }
+
+    // Attach verified user with DB role
+    req.user = dbUser;
     next();
-  } catch (error) {
-    res.status(403).json({ success: false, message: 'Invalid or expired authentication token.' });
+  } catch (error: any) {
+    console.error('[Auth Middleware Error]:', error);
+    res.status(401).json({ success: false, message: 'Authentication failed. Please log in again.' });
     return;
   }
 };
+
