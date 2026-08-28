@@ -5,6 +5,8 @@ import {
   auth,
   googleProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -99,6 +101,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let isMounted = true;
 
+    // Handle redirect result (for when signInWithRedirect was used)
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result?.user && isMounted) {
+          setFirebaseUser(result.user);
+        }
+      })
+      .catch((err) => {
+        console.warn('[Firebase Redirect Result Error]:', err);
+      });
+
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       if (!isMounted) return;
 
@@ -157,11 +170,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  // 2. Real Firebase Google Sign-In
+  // 2. Real Firebase Google Sign-In (popup with redirect fallback)
   const loginWithGoogle = async (): Promise<AuthResponse> => {
     setIsLoading(true);
     try {
-      const result = await signInWithPopup(auth, googleProvider);
+      let result;
+      try {
+        result = await signInWithPopup(auth, googleProvider);
+      } catch (popupError: any) {
+        // If popup is blocked, fall back to redirect-based sign-in
+        if (
+          popupError?.code === 'auth/popup-blocked' ||
+          popupError?.code === 'auth/popup-closed-by-user' ||
+          popupError?.code === 'auth/cancelled-popup-request'
+        ) {
+          // signInWithRedirect navigates away; onAuthStateChanged + getRedirectResult
+          // will handle the rest when the user returns
+          await signInWithRedirect(auth, googleProvider);
+          // This line won't execute (page navigates away), but return for type safety
+          return { success: true, message: 'Redirecting to Google sign-in...' };
+        }
+        throw popupError;
+      }
+
       const fbUser = result.user;
       setFirebaseUser(fbUser);
 
