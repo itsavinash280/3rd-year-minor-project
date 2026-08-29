@@ -1,11 +1,9 @@
 import { Router } from 'express';
 import {
   registerUser,
-  verifyOtp,
   loginUser,
-  googleAuth,
-  firebaseAuthLogin,
-  registerRole,
+  quickRoleLogin,
+  verifyOtp,
   getMe,
   getSessions,
   revokeSession,
@@ -15,15 +13,16 @@ import { authenticateToken } from '../middleware/authMiddleware.js';
 const router = Router();
 
 router.post('/register', registerUser);
-router.post('/verify-otp', verifyOtp);
 router.post('/login', loginUser);
-router.post('/google', googleAuth);
-router.post('/firebase-login', firebaseAuthLogin);
-router.post('/register-role', registerRole);
+router.post('/quick-login', quickRoleLogin);
+router.post('/verify-otp', verifyOtp);
+
+// Legacy aliases so any old requests continue to work smoothly
+router.post('/google', quickRoleLogin);
+router.post('/register-role', quickRoleLogin);
 
 router.get('/me', authenticateToken, getMe);
 router.get('/sessions', authenticateToken, getSessions);
 router.delete('/sessions/:sessionId', authenticateToken, revokeSession);
 
 export default router;
-

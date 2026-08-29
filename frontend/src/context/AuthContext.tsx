@@ -1,18 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
 import { apiRequest } from '../api/client';
-import {
-  auth,
-  googleProvider,
-  signInWithPopup,
-  signInWithRedirect,
-  getRedirectResult,
-  signOut,
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  FirebaseUser,
-} from '../config/firebase';
 
 export interface RoleInfo {
   role: UserRole;
@@ -56,266 +44,145 @@ export const AVAILABLE_ROLES: RoleInfo[] = [
     description: 'Farm-to-Mandi Logistics Coordination, Truck Scheduling & Route Fleet Tracking',
     icon: '🚚',
   },
+  {
+    role: 'ADMIN',
+    title: 'Platform Administrator',
+    titleHi: 'प्रशासक',
+    badge: 'Governance & Analytics',
+    description: 'System Oversight, Compliance, Master Data & Platform Intelligence Monitoring',
+    icon: '🛡️',
+  },
 ];
-
-export interface PendingUser {
-  uid: string;
-  email: string;
-  name: string;
-  avatar: string;
-  idToken: string;
-}
 
 export interface AuthResponse {
   success: boolean;
   message?: string;
-  isNewUser?: boolean;
   role?: UserRole;
   user?: User;
 }
 
 interface AuthContextType {
   user: User | null;
-  firebaseUser: FirebaseUser | null;
-  pendingFirebaseUser: PendingUser | null;
   token: string | null;
   isLoading: boolean;
-  loginWithGoogle: () => Promise<AuthResponse>;
-  selectRole: (role: UserRole, details?: { name?: string; phone?: string; avatar?: string }) => Promise<AuthResponse>;
-  login: (email: string, pass: string) => Promise<AuthResponse>;
+  quickLogin: (role: UserRole, customName?: string) => Promise<AuthResponse>;
+  login: (emailOrPhone: string, password?: string) => Promise<AuthResponse>;
   register: (data: any) => Promise<AuthResponse>;
-  logout: () => Promise<void>;
-  clearPendingUser: () => void;
+  logout: () => void;
+  // Compatibility helpers
+  loginWithGoogle?: () => Promise<AuthResponse>;
+  selectRole?: (role: UserRole) => Promise<AuthResponse>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
-  const [pendingFirebaseUser, setPendingFirebaseUser] = useState<PendingUser | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    try {
+      const cached = localStorage.getItem('asraverse_user');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('asraverse_token') || null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // 1. Firebase Auth State Listener (Source of Truth)
+  // Validate active session token with backend on mount
   useEffect(() => {
     let isMounted = true;
 
-    // Handle redirect result (for when signInWithRedirect was used)
-    getRedirectResult(auth)
-      .then((result) => {
-        if (result?.user && isMounted) {
-          setFirebaseUser(result.user);
+    const checkSession = async () => {
+      const savedToken = localStorage.getItem('asraverse_token');
+      if (!savedToken) {
+        if (isMounted) {
+          setUser(null);
+          setIsLoading(false);
         }
-      })
-      .catch((err) => {
-        console.warn('[Firebase Redirect Result Error]:', err);
-      });
-
-    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
-      if (!isMounted) return;
-
-      if (!fbUser) {
-        // Unauthenticated
-        setUser(null);
-        setFirebaseUser(null);
-        setPendingFirebaseUser(null);
-        setToken(null);
-        localStorage.removeItem('asraverse_token');
-        localStorage.removeItem('asraverse_user');
-        setIsLoading(false);
         return;
       }
 
-      setFirebaseUser(fbUser);
-
       try {
-        const idToken = await fbUser.getIdToken();
-
-        // Check user record with backend
-        const backendRes = await apiRequest('/auth/firebase-login', {
-          method: 'POST',
-          body: JSON.stringify({ idToken }),
-        });
-
+        const res = await apiRequest('/auth/me');
         if (!isMounted) return;
 
-        if (backendRes.success && !backendRes.isNewUser && backendRes.user) {
-          // Existing registered user
-          setUser(backendRes.user);
-          setToken(backendRes.token || idToken);
-          setPendingFirebaseUser(null);
-          localStorage.setItem('asraverse_token', backendRes.token || idToken);
-        } else if (backendRes.success && backendRes.isNewUser) {
-          // New authenticated user needing role selection
+        if (res.success && res.user) {
+          setUser(res.user);
+          localStorage.setItem('asraverse_user', JSON.stringify(res.user));
+        } else {
+          // Token is invalid/expired
           setUser(null);
-          setPendingFirebaseUser({
-            uid: fbUser.uid,
-            email: fbUser.email || `${fbUser.uid}@asraverse.in`,
-            name: fbUser.displayName || 'Google User',
-            avatar: fbUser.photoURL || '',
-            idToken,
-          });
+          setToken(null);
+          localStorage.removeItem('asraverse_token');
+          localStorage.removeItem('asraverse_user');
         }
       } catch (err) {
-        console.error('[Firebase Auth State Sync Error]:', err);
+        console.warn('[Session Verification Notice]:', err);
       } finally {
         if (isMounted) setIsLoading(false);
       }
-    });
+    };
+
+    checkSession();
 
     return () => {
       isMounted = false;
-      unsubscribe();
     };
   }, []);
 
-  // 2. Real Firebase Google Sign-In (popup with redirect fallback)
-  const loginWithGoogle = async (): Promise<AuthResponse> => {
+  // 1. One-Click Quick Role Login
+  const quickLogin = async (role: UserRole, customName?: string): Promise<AuthResponse> => {
     setIsLoading(true);
     try {
-      let result;
-      try {
-        result = await signInWithPopup(auth, googleProvider);
-      } catch (popupError: any) {
-        // If popup is blocked, fall back to redirect-based sign-in
-        if (
-          popupError?.code === 'auth/popup-blocked' ||
-          popupError?.code === 'auth/popup-closed-by-user' ||
-          popupError?.code === 'auth/cancelled-popup-request'
-        ) {
-          // signInWithRedirect navigates away; onAuthStateChanged + getRedirectResult
-          // will handle the rest when the user returns
-          await signInWithRedirect(auth, googleProvider);
-          // This line won't execute (page navigates away), but return for type safety
-          return { success: true, message: 'Redirecting to Google sign-in...' };
-        }
-        throw popupError;
-      }
-
-      const fbUser = result.user;
-      setFirebaseUser(fbUser);
-
-      const idToken = await fbUser.getIdToken(true);
-
-      // Verify with backend
-      const backendRes = await apiRequest('/auth/firebase-login', {
+      const res = await apiRequest('/auth/quick-login', {
         method: 'POST',
-        body: JSON.stringify({ idToken }),
+        body: JSON.stringify({ role, name: customName }),
       });
 
-      if (backendRes.success && !backendRes.isNewUser && backendRes.user) {
-        // Existing user with saved role
-        setUser(backendRes.user);
-        setToken(backendRes.token || idToken);
-        setPendingFirebaseUser(null);
-        localStorage.setItem('asraverse_token', backendRes.token || idToken);
-        setIsLoading(false);
-        return { success: true, isNewUser: false, role: backendRes.user.role, user: backendRes.user };
-      }
-
-      if (backendRes.success && backendRes.isNewUser) {
-        // New user -> Trigger role selection step
-        const pending: PendingUser = {
-          uid: fbUser.uid,
-          email: fbUser.email || `${fbUser.uid}@asraverse.in`,
-          name: fbUser.displayName || 'Google User',
-          avatar: fbUser.photoURL || '',
-          idToken,
-        };
-        setUser(null);
-        setPendingFirebaseUser(pending);
-        setIsLoading(false);
-        return { success: true, isNewUser: true, message: 'Please choose your account role to complete registration.' };
-      }
-
-      setIsLoading(false);
-      return { success: false, message: backendRes.message || 'Failed to authenticate with backend.' };
-    } catch (error: any) {
-      setIsLoading(false);
-      console.error('[Google Sign-In Error]:', error);
-      return {
-        success: false,
-        message: error.message || 'Google sign-in was cancelled or failed. Please try again.',
-      };
-    }
-  };
-
-  // 3. Role Selection & Backend Profile Creation (for New Users)
-  const selectRole = async (
-    role: UserRole,
-    details?: { name?: string; phone?: string; avatar?: string }
-  ): Promise<AuthResponse> => {
-    if (!firebaseUser && !pendingFirebaseUser) {
-      return { success: false, message: 'Google authentication required before selecting a role.' };
-    }
-
-    if (role === 'ADMIN') {
-      return { success: false, message: 'Security restriction: Admin role cannot be self-assigned.' };
-    }
-
-    setIsLoading(true);
-    try {
-      const idToken = (await firebaseUser?.getIdToken()) || pendingFirebaseUser?.idToken;
-      if (!idToken) {
-        setIsLoading(false);
-        return { success: false, message: 'Session expired. Please log in with Google again.' };
-      }
-
-      const res = await apiRequest('/auth/register-role', {
-        method: 'POST',
-        body: JSON.stringify({
-          idToken,
-          role,
-          name: details?.name || pendingFirebaseUser?.name || firebaseUser?.displayName,
-          phone: details?.phone || '',
-          avatar: details?.avatar || pendingFirebaseUser?.avatar || firebaseUser?.photoURL,
-        }),
-      });
-
-      if (res.success && res.user) {
+      if (res.success && res.user && res.token) {
         setUser(res.user);
-        setToken(res.token || idToken);
-        setPendingFirebaseUser(null);
-        localStorage.setItem('asraverse_token', res.token || idToken);
+        setToken(res.token);
+        localStorage.setItem('asraverse_token', res.token);
+        localStorage.setItem('asraverse_user', JSON.stringify(res.user));
         setIsLoading(false);
         return { success: true, role: res.user.role, user: res.user };
       }
 
       setIsLoading(false);
-      return { success: false, message: res.message || 'Failed to save role and create profile.' };
-    } catch (error: any) {
+      return { success: false, message: res.message || 'Login failed.' };
+    } catch (err: any) {
       setIsLoading(false);
-      return { success: false, message: error.message || 'Network error while saving role.' };
+      return { success: false, message: err.message || 'Unable to connect to authentication server.' };
     }
   };
 
-  // 4. Standard Email/Password Login
-  const login = async (email: string, pass: string): Promise<AuthResponse> => {
+  // 2. Standard Email / Password Sign In
+  const login = async (emailOrPhone: string, password?: string): Promise<AuthResponse> => {
     setIsLoading(true);
     try {
       const res = await apiRequest('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ emailOrPhone: email, password: pass }),
+        body: JSON.stringify({ emailOrPhone, password }),
       });
 
-      if (res.success && res.user) {
+      if (res.success && res.user && res.token) {
         setUser(res.user);
         setToken(res.token);
         localStorage.setItem('asraverse_token', res.token);
+        localStorage.setItem('asraverse_user', JSON.stringify(res.user));
         setIsLoading(false);
         return { success: true, role: res.user.role, user: res.user };
       }
 
       setIsLoading(false);
-      return { success: false, message: res.message || 'Invalid email or password.' };
+      return { success: false, message: res.message || 'Invalid credentials entered.' };
     } catch (e: any) {
       setIsLoading(false);
       return { success: false, message: e.message || 'Login failed.' };
     }
   };
 
-  // 5. Standard Email/Password Registration
+  // 3. User Registration
   const register = async (data: any): Promise<AuthResponse> => {
     setIsLoading(true);
     try {
@@ -324,10 +191,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         body: JSON.stringify(data),
       });
 
-      if (res.success && res.user) {
+      if (res.success && res.user && res.token) {
         setUser(res.user);
         setToken(res.token);
         localStorage.setItem('asraverse_token', res.token);
+        localStorage.setItem('asraverse_user', JSON.stringify(res.user));
         setIsLoading(false);
         return { success: true, role: res.user.role, user: res.user };
       }
@@ -340,41 +208,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // 6. Sign Out
-  const logout = async () => {
-    try {
-      if (auth) {
-        await signOut(auth);
-      }
-    } catch (err) {
-      console.warn('[SignOut Warning]:', err);
-    }
+  // 4. Sign Out
+  const logout = () => {
     setUser(null);
-    setFirebaseUser(null);
-    setPendingFirebaseUser(null);
     setToken(null);
     localStorage.removeItem('asraverse_token');
     localStorage.removeItem('asraverse_user');
-  };
-
-  const clearPendingUser = () => {
-    setPendingFirebaseUser(null);
   };
 
   return (
     <AuthContext.Provider
       value={{
         user,
-        firebaseUser,
-        pendingFirebaseUser,
         token,
         isLoading,
-        loginWithGoogle,
-        selectRole,
+        quickLogin,
         login,
         register,
         logout,
-        clearPendingUser,
+        loginWithGoogle: () => quickLogin('FARMER'),
+        selectRole: (r: UserRole) => quickLogin(r),
       }}
     >
       {children}
@@ -387,4 +240,3 @@ export const useAuth = () => {
   if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
   return ctx;
 };
-

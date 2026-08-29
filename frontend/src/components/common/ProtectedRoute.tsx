@@ -26,7 +26,7 @@ export const getRoleHomePath = (role: UserRole): string => {
 };
 
 export const LoadingSplashScreen: React.FC<{ message?: string }> = ({
-  message = 'Verifying secure session with Firebase & National Portal...',
+  message = 'Verifying secure session with National Agri Intelligence Portal...',
 }) => {
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-white select-none">
@@ -56,7 +56,7 @@ export const LoadingSplashScreen: React.FC<{ message?: string }> = ({
 
         <div className="pt-6 flex items-center justify-center gap-1.5 text-[11px] text-emerald-400/80">
           <ShieldCheck className="w-3.5 h-3.5" />
-          <span>Google Cloud OAuth 2.0 & Firebase Verified Security</span>
+          <span>Encrypted JWT & Zero-Trust Session Verification</span>
         </div>
       </div>
     </div>

@@ -4,7 +4,6 @@ export type UserRole = 'FARMER' | 'BUYER' | 'EXPERT' | 'TRANSPORT' | 'ADMIN';
 
 export interface IUser extends Document {
   _id: mongoose.Types.ObjectId;
-  firebaseUid?: string;
   name: string;
   email: string;
   phone?: string;
@@ -26,7 +25,6 @@ export interface IUser extends Document {
 
 const UserSchema: Schema = new Schema(
   {
-    firebaseUid: { type: String, sparse: true, index: true },
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     phone: { type: String, sparse: true, trim: true },
@@ -54,7 +52,7 @@ const UserSchema: Schema = new Schema(
 );
 
 UserSchema.index({ email: 1, role: 1 });
-UserSchema.index({ firebaseUid: 1 });
 
 export const User = mongoose.model<IUser>('User', UserSchema);
+
 

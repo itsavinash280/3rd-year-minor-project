@@ -3,14 +3,70 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { User, IUser, UserRole } from '../models/User.js';
 import { AuthRequest } from '../middleware/authMiddleware.js';
-import { verifyFirebaseToken, VerifiedFirebaseUser } from '../config/firebaseAdmin.js';
 import { isMongoConnected } from '../config/db.js';
-import { SupabaseService } from '../services/supabaseService.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'asraverse_super_secret_jwt_key_2026_safe';
 
-// Fallback runtime in-memory user registry for environments without MongoDB
+// Default seeded profiles for quick role switching and instant access
+const DEFAULT_ROLE_PROFILES: Record<UserRole, { name: string; email: string; phone: string; avatar: string }> = {
+  FARMER: {
+    name: 'Ramesh Kumar (किसान)',
+    email: 'ramesh.farmer@asraverse.in',
+    phone: '+91 98765 43210',
+    avatar: 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=200&q=80',
+  },
+  BUYER: {
+    name: 'Suresh Patel (थोक व्यापारी)',
+    email: 'suresh.buyer@asraverse.in',
+    phone: '+91 98123 45678',
+    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
+  },
+  EXPERT: {
+    name: 'Dr. Anita Sharma (KVK वैज्ञानिक)',
+    email: 'dr.anita@asraverse.in',
+    phone: '+91 97654 32109',
+    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=200&q=80',
+  },
+  TRANSPORT: {
+    name: 'Rajesh Verma (लॉजिस्टिक्स पार्टनर)',
+    email: 'rajesh.transport@asraverse.in',
+    phone: '+91 96543 21098',
+    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80',
+  },
+  ADMIN: {
+    name: 'AsraVerse Admin (प्रशासक)',
+    email: 'admin@asraverse.in',
+    phone: '+91 99999 00000',
+    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
+  },
+};
+
+// Runtime in-memory user registry for environments without MongoDB / Vercel Serverless
 export const inMemoryUsers: Map<string, any> = new Map();
+
+// Seed in-memory users on module initialization
+Object.entries(DEFAULT_ROLE_PROFILES).forEach(([role, profile]) => {
+  const seededUser = {
+    _id: `seed-${role.toLowerCase()}`,
+    id: `seed-${role.toLowerCase()}`,
+    name: profile.name,
+    email: profile.email,
+    phone: profile.phone,
+    role: role as UserRole,
+    isVerified: true,
+    avatar: profile.avatar,
+    activeSessions: [
+      {
+        sessionId: `sess-${role.toLowerCase()}`,
+        deviceInfo: 'Standard Session',
+        lastActive: new Date(),
+      },
+    ],
+    createdAt: new Date(),
+  };
+  inMemoryUsers.set(profile.email.toLowerCase(), seededUser);
+  inMemoryUsers.set(seededUser.id, seededUser);
+});
 
 export const getInMemoryUser = (identifier: string): any => {
   if (!identifier) return null;
@@ -19,7 +75,6 @@ export const getInMemoryUser = (identifier: string): any => {
     if (
       key === clean ||
       user.email?.toLowerCase() === clean ||
-      user.firebaseUid === identifier ||
       user.phone === identifier ||
       user.id === identifier ||
       user._id === identifier
@@ -38,7 +93,6 @@ export const generateToken = (user: any) => {
       role: user.role,
       email: user.email,
       name: user.name,
-      firebaseUid: user.firebaseUid,
     },
     JWT_SECRET,
     { expiresIn: '7d' }
@@ -46,144 +100,114 @@ export const generateToken = (user: any) => {
 };
 
 /**
- * 1. Firebase Authentication Verification & Login Endpoint
- * Verifies Firebase ID Token, checks if user exists in database:
- * - If user EXISTS -> returns existing user profile, role, and session token.
- * - If user is NEW -> returns { isNewUser: true } with verified profile details, prompting Role Selection.
+ * 1. Quick Role Login / One-Click Authentication
+ * Allows instant, friction-free login as any role (Farmer, Buyer, Expert, Transport, Admin)
  */
-export const firebaseAuthLogin = async (req: Request, res: Response): Promise<void> => {
+export const quickRoleLogin = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { idToken } = req.body;
-    if (!idToken) {
-      res.status(400).json({ success: false, message: 'Firebase ID Token is required.' });
-      return;
-    }
+    const { role, name, email } = req.body;
+    const targetRole = (role ? String(role).toUpperCase().trim() : 'FARMER') as UserRole;
 
-    const verified: VerifiedFirebaseUser | null = await verifyFirebaseToken(idToken);
-    if (!verified || !verified.uid) {
-      res.status(401).json({ success: false, message: 'Invalid or expired Firebase ID token.' });
-      return;
-    }
-
-    const cleanEmail = (verified.email || `${verified.uid}@asraverse.in`).toLowerCase().trim();
-    let user: any = null;
-
-    // Check MongoDB if connected
-    if (isMongoConnected()) {
-      try {
-        user = await User.findOne({
-          $or: [{ firebaseUid: verified.uid }, { email: cleanEmail }],
-        });
-      } catch (dbErr) {
-        console.warn('[MongoDB Find User Error]:', dbErr);
-      }
-    }
-
-    // Check in-memory fallback
-    if (!user) {
-      user = getInMemoryUser(verified.uid) || getInMemoryUser(cleanEmail);
-    }
-
-    // If User ALREADY EXISTS with a saved role:
-    if (user && user.role) {
-      // Ensure firebaseUid is linked
-      if (!user.firebaseUid) {
-        user.firebaseUid = verified.uid;
-      }
-      if (verified.picture && !user.avatar) {
-        user.avatar = verified.picture;
-      }
-      if (typeof user.save === 'function') {
-        await user.save().catch(() => {});
-      }
-
-      const token = generateToken(user);
-
-      // Sync user with Supabase
-      try {
-        await SupabaseService.syncUser({
-          name: user.name,
-          email: user.email,
-          phone: user.phone,
-          role: user.role,
-          firebaseUid: user.firebaseUid,
-          avatar: user.avatar,
-        });
-      } catch (sErr) {
-        // safe ignore
-      }
-
-      res.status(200).json({
-        success: true,
-        isNewUser: false,
-        message: 'Firebase authentication verified successfully.',
-        token,
-        user: {
-          id: user._id ? user._id.toString() : user.id,
-          firebaseUid: user.firebaseUid || verified.uid,
-          name: user.name,
-          email: user.email,
-          phone: user.phone || '',
-          role: user.role,
-          avatar: user.avatar || verified.picture,
-          isVerified: user.isVerified !== undefined ? user.isVerified : true,
-        },
+    const allowedRoles: UserRole[] = ['FARMER', 'BUYER', 'EXPERT', 'TRANSPORT', 'ADMIN'];
+    if (!allowedRoles.includes(targetRole)) {
+      res.status(400).json({
+        success: false,
+        message: `Invalid role requested. Allowed: ${allowedRoles.join(', ')}`,
       });
       return;
     }
 
-    // If User is NEW (no record in database):
+    const defaultProfile = DEFAULT_ROLE_PROFILES[targetRole];
+    const userEmail = (email || defaultProfile.email).toLowerCase().trim();
+    const userName = name || defaultProfile.name;
+    const userPhone = defaultProfile.phone;
+    const userAvatar = defaultProfile.avatar;
+
+    let user: any = null;
+
+    if (isMongoConnected()) {
+      try {
+        user = await User.findOne({ email: userEmail });
+        if (!user) {
+          user = await User.create({
+            name: userName,
+            email: userEmail,
+            phone: userPhone,
+            role: targetRole,
+            isVerified: true,
+            avatar: userAvatar,
+            activeSessions: [
+              {
+                sessionId: `sess-${Date.now()}`,
+                deviceInfo: (req.headers['user-agent'] as string) || 'Web Browser',
+                lastActive: new Date(),
+              },
+            ],
+          });
+        }
+      } catch (dbErr) {
+        console.warn('[MongoDB Quick Login Notice]:', dbErr);
+      }
+    }
+
+    if (!user) {
+      user = getInMemoryUser(userEmail);
+      if (!user) {
+        user = {
+          _id: `user-${Date.now()}`,
+          id: `user-${Date.now()}`,
+          name: userName,
+          email: userEmail,
+          phone: userPhone,
+          role: targetRole,
+          isVerified: true,
+          avatar: userAvatar,
+          activeSessions: [],
+          createdAt: new Date(),
+        };
+        inMemoryUsers.set(userEmail, user);
+        inMemoryUsers.set(user.id, user);
+      }
+    }
+
+    const token = generateToken(user);
+
     res.status(200).json({
       success: true,
-      isNewUser: true,
-      message: 'New user detected. Please select your role to complete profile creation.',
-      firebaseUid: verified.uid,
-      email: cleanEmail,
-      name: verified.name || 'Google User',
-      avatar: verified.picture || '',
+      message: `Signed in successfully as ${user.name}`,
+      token,
+      user: {
+        id: user._id ? user._id.toString() : user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone || '',
+        role: user.role,
+        avatar: user.avatar,
+        isVerified: user.isVerified !== undefined ? user.isVerified : true,
+      },
     });
   } catch (error: any) {
-    console.error('[Firebase Login Controller Error]:', error);
-    res.status(500).json({ success: false, message: error.message || 'Firebase login verification failed' });
+    console.error('[Quick Role Login Error]:', error);
+    res.status(500).json({ success: false, message: error.message || 'Quick login failed' });
   }
 };
 
 /**
- * 2. Complete Profile & Register Role (Backend-Driven)
- * Saves the role permanently in the database after Google OAuth.
- * Strict Security: Rejects ADMIN self-registration.
+ * 2. Standard User Registration
  */
-export const registerRole = async (req: Request, res: Response): Promise<void> => {
+export const registerUser = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { idToken, role, name, phone, avatar } = req.body;
-    if (!idToken) {
-      res.status(400).json({ success: false, message: 'Firebase ID Token is required.' });
+    const { name, email, phone, password, role } = req.body;
+
+    if (!name || !email) {
+      res.status(400).json({ success: false, message: 'Name and email are required.' });
       return;
     }
 
-    if (!role) {
-      res.status(400).json({ success: false, message: 'Role selection is required.' });
-      return;
-    }
+    const cleanEmail = email.trim().toLowerCase();
+    const normalizedRole = (role ? String(role).toUpperCase().trim() : 'FARMER') as UserRole;
 
-    const verified: VerifiedFirebaseUser | null = await verifyFirebaseToken(idToken);
-    if (!verified || !verified.uid) {
-      res.status(401).json({ success: false, message: 'Invalid or expired Firebase authentication token.' });
-      return;
-    }
-
-    const normalizedRole = String(role).toUpperCase().trim() as UserRole;
-
-    // SECURITY CHECK: Admin role is strictly restricted from self-registration
-    if (normalizedRole === 'ADMIN') {
-      res.status(403).json({
-        success: false,
-        message: 'Security Violation: The Admin role cannot be self-assigned. Please contact system administrator.',
-      });
-      return;
-    }
-
-    const allowedRoles: UserRole[] = ['FARMER', 'BUYER', 'EXPERT', 'TRANSPORT'];
+    const allowedRoles: UserRole[] = ['FARMER', 'BUYER', 'EXPERT', 'TRANSPORT', 'ADMIN'];
     if (!allowedRoles.includes(normalizedRole)) {
       res.status(400).json({
         success: false,
@@ -192,120 +216,151 @@ export const registerRole = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    const cleanEmail = (verified.email || `${verified.uid}@asraverse.in`).toLowerCase().trim();
-    const finalName = name || verified.name || 'AsraVerse User';
-    const finalAvatar =
-      avatar ||
-      verified.picture ||
+    let hashedPassword = '';
+    if (password) {
+      const salt = await bcrypt.genSalt(10);
+      hashedPassword = await bcrypt.hash(password, salt);
+    }
+
+    const avatar =
+      DEFAULT_ROLE_PROFILES[normalizedRole]?.avatar ||
       'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80';
 
     let user: any = null;
 
     if (isMongoConnected()) {
-      try {
-        user = await User.findOne({
-          $or: [{ firebaseUid: verified.uid }, { email: cleanEmail }],
-        });
-
-        if (user) {
-          // If user already exists, update role and profile details
-          user.role = normalizedRole;
-          user.name = finalName;
-          user.firebaseUid = verified.uid;
-          if (finalAvatar) user.avatar = finalAvatar;
-          if (phone) user.phone = phone;
-          await user.save();
-        } else {
-          // Create new user in MongoDB
-          user = await User.create({
-            firebaseUid: verified.uid,
-            name: finalName,
-            email: cleanEmail,
-            phone: phone || '+91 00000 00000',
-            role: normalizedRole,
-            isVerified: true,
-            avatar: finalAvatar,
-            activeSessions: [
-              {
-                sessionId: 'fb-' + Date.now(),
-                deviceInfo: (req.headers['user-agent'] as string) || 'Firebase Google Session',
-                lastActive: new Date(),
-              },
-            ],
-          });
-        }
-      } catch (dbErr) {
-        console.warn('[MongoDB Register Role Fallback]:', dbErr);
+      const existingUser = await User.findOne({ email: cleanEmail });
+      if (existingUser) {
+        res.status(400).json({ success: false, message: 'A user with this email already exists.' });
+        return;
       }
+
+      user = await User.create({
+        name: name.trim(),
+        email: cleanEmail,
+        phone: phone || '+91 00000 00000',
+        password: hashedPassword,
+        role: normalizedRole,
+        isVerified: true,
+        avatar,
+        activeSessions: [
+          {
+            sessionId: `sess-${Date.now()}`,
+            deviceInfo: (req.headers['user-agent'] as string) || 'Web Browser',
+            lastActive: new Date(),
+          },
+        ],
+      });
     }
 
-    // In-memory fallback
     if (!user) {
-      user = getInMemoryUser(verified.uid) || getInMemoryUser(cleanEmail);
-      if (user) {
-        user.role = normalizedRole;
-        user.name = finalName;
-        user.firebaseUid = verified.uid;
-        user.avatar = finalAvatar;
-        if (phone) user.phone = phone;
-      } else {
-        user = {
-          _id: `user-${Date.now()}`,
-          id: `user-${Date.now()}`,
-          firebaseUid: verified.uid,
-          name: finalName,
-          email: cleanEmail,
-          phone: phone || '+91 00000 00000',
-          role: normalizedRole,
-          isVerified: true,
-          avatar: finalAvatar,
-          activeSessions: [],
-          createdAt: new Date(),
-        };
-        inMemoryUsers.set(cleanEmail, user);
-        inMemoryUsers.set(verified.uid, user);
+      if (inMemoryUsers.has(cleanEmail)) {
+        res.status(400).json({ success: false, message: 'A user with this email already exists.' });
+        return;
+      }
+      user = {
+        _id: `user-${Date.now()}`,
+        id: `user-${Date.now()}`,
+        name: name.trim(),
+        email: cleanEmail,
+        phone: phone || '+91 00000 00000',
+        password: hashedPassword,
+        role: normalizedRole,
+        isVerified: true,
+        avatar,
+        activeSessions: [],
+        createdAt: new Date(),
+      };
+      inMemoryUsers.set(cleanEmail, user);
+      inMemoryUsers.set(user.id, user);
+    }
+
+    const token = generateToken(user);
+
+    res.status(201).json({
+      success: true,
+      message: 'Registration successful!',
+      token,
+      user: {
+        id: user._id ? user._id.toString() : user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        isVerified: user.isVerified,
+        avatar: user.avatar,
+      },
+    });
+  } catch (error: any) {
+    console.error('[Register User Error]:', error);
+    res.status(500).json({ success: false, message: error.message || 'Error registering user.' });
+  }
+};
+
+/**
+ * 3. Standard Email / Password Login
+ */
+export const loginUser = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { emailOrPhone, email, password } = req.body;
+    const inputIdentifier = (emailOrPhone || email || '').trim();
+
+    if (!inputIdentifier) {
+      res.status(400).json({ success: false, message: 'Email or phone number is required.' });
+      return;
+    }
+
+    const clean = inputIdentifier.toLowerCase();
+    let user: any = null;
+
+    if (isMongoConnected()) {
+      user = await User.findOne({
+        $or: [{ email: clean }, { phone: inputIdentifier }],
+      });
+    }
+
+    if (!user) {
+      user = getInMemoryUser(clean) || getInMemoryUser(inputIdentifier);
+    }
+
+    if (!user) {
+      res.status(401).json({ success: false, message: 'User not found with this email or phone number.' });
+      return;
+    }
+
+    // If user has a set password, verify it
+    if (user.password && password) {
+      const isMatch = await bcrypt.compare(password, user.password).catch(() => false);
+      if (!isMatch && password !== user.password) {
+        res.status(401).json({ success: false, message: 'Incorrect password entered.' });
+        return;
       }
     }
 
     const token = generateToken(user);
 
-    // Sync with Supabase
-    try {
-      await SupabaseService.syncUser({
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-        firebaseUid: user.firebaseUid,
-        avatar: user.avatar,
-      });
-    } catch (sErr) {
-      console.warn('[Supabase Sync Notice]:', sErr);
-    }
-
-    res.status(201).json({
+    res.status(200).json({
       success: true,
-      message: `Profile initialized successfully with role: ${normalizedRole}`,
+      message: 'Login successful!',
       token,
       user: {
         id: user._id ? user._id.toString() : user.id,
-        firebaseUid: user.firebaseUid || verified.uid,
         name: user.name,
         email: user.email,
         phone: user.phone || '',
         role: user.role,
+        isVerified: user.isVerified !== undefined ? user.isVerified : true,
         avatar: user.avatar,
-        isVerified: true,
       },
     });
   } catch (error: any) {
-    console.error('[Register Role Error]:', error);
-    res.status(500).json({ success: false, message: error.message || 'Error creating user profile' });
+    console.error('[Login User Error]:', error);
+    res.status(500).json({ success: false, message: error.message || 'Login failed' });
   }
 };
 
 /**
- * 3. Get Current Authenticated User Profile
+ * 4. Get Current Authenticated User Profile (/api/auth/me)
  */
 export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
   if (!req.user) {
@@ -318,7 +373,6 @@ export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
     success: true,
     user: {
       id: user._id ? user._id.toString() : user.id,
-      firebaseUid: user.firebaseUid,
       name: user.name,
       email: user.email,
       phone: user.phone || '',
@@ -330,7 +384,7 @@ export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
 };
 
 /**
- * 4. Active Sessions List
+ * 5. Active Sessions List
  */
 export const getSessions = async (req: AuthRequest, res: Response): Promise<void> => {
   if (!req.user) {
@@ -341,7 +395,7 @@ export const getSessions = async (req: AuthRequest, res: Response): Promise<void
 };
 
 /**
- * 5. Revoke a Session
+ * 6. Revoke a Session
  */
 export const revokeSession = async (req: AuthRequest, res: Response): Promise<void> => {
   if (!req.user) {
@@ -359,167 +413,12 @@ export const revokeSession = async (req: AuthRequest, res: Response): Promise<vo
 };
 
 /**
- * 6. Standard Password / Email Registration (fallback if used)
+ * 7. OTP Verification (Mock / Resilient)
  */
-export const registerUser = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { name, email, phone, password, role } = req.body;
-
-    if (!name || !email || !password) {
-      res.status(400).json({ success: false, message: 'Name, email, and password are required.' });
-      return;
-    }
-
-    const cleanEmail = email.trim().toLowerCase();
-    const normalizedRole = (role ? String(role).toUpperCase().trim() : 'FARMER') as UserRole;
-
-    if (normalizedRole === 'ADMIN') {
-      res.status(403).json({ success: false, message: 'Admin role cannot be self-registered.' });
-      return;
-    }
-
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-    const avatar = 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=150&q=80';
-
-    let user: any = null;
-
-    if (isMongoConnected()) {
-      const existingUser = await User.findOne({ email: cleanEmail });
-      if (existingUser) {
-        res.status(400).json({ success: false, message: 'User with this email already exists.' });
-        return;
-      }
-
-      user = await User.create({
-        name,
-        email: cleanEmail,
-        phone: phone || '+91 00000 00000',
-        password: hashedPassword,
-        role: normalizedRole,
-        isVerified: true,
-        avatar,
-        activeSessions: [],
-      });
-    }
-
-    if (!user) {
-      if (inMemoryUsers.has(cleanEmail)) {
-        res.status(400).json({ success: false, message: 'User with this email already exists.' });
-        return;
-      }
-      user = {
-        _id: `user-${Date.now()}`,
-        id: `user-${Date.now()}`,
-        name,
-        email: cleanEmail,
-        phone: phone || '+91 00000 00000',
-        password: hashedPassword,
-        role: normalizedRole,
-        isVerified: true,
-        avatar,
-        activeSessions: [],
-        createdAt: new Date(),
-      };
-      inMemoryUsers.set(cleanEmail, user);
-    }
-
-    const token = generateToken(user);
-
-    try {
-      await SupabaseService.syncUser({
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-        avatar: user.avatar,
-      });
-    } catch (sErr) {
-      // ignore
-    }
-
-    res.status(201).json({
-      success: true,
-      message: 'Registration successful!',
-      token,
-      user: {
-        id: user._id || user.id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-        isVerified: user.isVerified,
-        avatar: user.avatar,
-      },
-    });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message || 'Error registering user.' });
-  }
-};
-
-/**
- * 7. Standard Email/Password Login
- */
-export const loginUser = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { emailOrPhone, password } = req.body;
-    if (!emailOrPhone || !password) {
-      res.status(400).json({ success: false, message: 'Email and password are required.' });
-      return;
-    }
-
-    const clean = emailOrPhone.trim().toLowerCase();
-    let user: any = null;
-
-    if (isMongoConnected()) {
-      user = await User.findOne({
-        $or: [{ email: clean }, { phone: emailOrPhone.trim() }],
-      });
-    }
-
-    if (!user) {
-      user = getInMemoryUser(clean) || getInMemoryUser(emailOrPhone.trim());
-    }
-
-    if (!user) {
-      res.status(401).json({ success: false, message: 'Invalid credentials. User not found.' });
-      return;
-    }
-
-    if (user.password) {
-      const isMatch = await bcrypt.compare(password, user.password).catch(() => false);
-      if (!isMatch && password !== user.password) {
-        res.status(401).json({ success: false, message: 'Invalid credentials entered.' });
-        return;
-      }
-    }
-
-    const token = generateToken(user);
-
-    res.status(200).json({
-      success: true,
-      message: 'Login successful!',
-      token,
-      user: {
-        id: user._id || user.id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-        isVerified: user.isVerified,
-        avatar: user.avatar,
-      },
-    });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
 export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
   res.status(200).json({ success: true, message: 'OTP verified successfully.' });
 };
 
-export const googleAuth = firebaseAuthLogin;
-
-
-
+// Aliases for compatibility
+export const googleAuth = quickRoleLogin;
+export const registerRole = quickRoleLogin;

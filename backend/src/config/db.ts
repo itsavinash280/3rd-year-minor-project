@@ -21,7 +21,7 @@ export const connectDB = async (): Promise<void> => {
   // On Vercel serverless, don't attempt to connect to localhost if MONGODB_URI is not configured
   if (!connUri || connUri.includes('127.0.0.1') || connUri.includes('localhost')) {
     if (process.env.VERCEL) {
-      console.warn('[MongoDB] No cloud MONGODB_URI configured for Vercel. Running in serverless resilient mode with Supabase fallback.');
+      console.warn('[MongoDB] No cloud MONGODB_URI configured for Vercel. Running in serverless resilient mode with in-memory registry.');
       return;
     }
   }
