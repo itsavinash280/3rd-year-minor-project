@@ -65,13 +65,9 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   isLoading: boolean;
-  quickLogin: (role: UserRole, customName?: string) => Promise<AuthResponse>;
   login: (emailOrPhone: string, password?: string) => Promise<AuthResponse>;
-  register: (data: any) => Promise<AuthResponse>;
+  register: (data: { name: string; email: string; phone?: string; password?: string; role: UserRole }) => Promise<AuthResponse>;
   logout: () => void;
-  // Compatibility helpers
-  loginWithGoogle?: () => Promise<AuthResponse>;
-  selectRole?: (role: UserRole) => Promise<AuthResponse>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -110,7 +106,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(res.user);
           localStorage.setItem('asraverse_user', JSON.stringify(res.user));
         } else {
-          // Token is invalid/expired
+          // Token is invalid or expired
           setUser(null);
           setToken(null);
           localStorage.removeItem('asraverse_token');
@@ -130,33 +126,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  // 1. One-Click Quick Role Login
-  const quickLogin = async (role: UserRole, customName?: string): Promise<AuthResponse> => {
-    setIsLoading(true);
-    try {
-      const res = await apiRequest('/auth/quick-login', {
-        method: 'POST',
-        body: JSON.stringify({ role, name: customName }),
-      });
-
-      if (res.success && res.user && res.token) {
-        setUser(res.user);
-        setToken(res.token);
-        localStorage.setItem('asraverse_token', res.token);
-        localStorage.setItem('asraverse_user', JSON.stringify(res.user));
-        setIsLoading(false);
-        return { success: true, role: res.user.role, user: res.user };
-      }
-
-      setIsLoading(false);
-      return { success: false, message: res.message || 'Login failed.' };
-    } catch (err: any) {
-      setIsLoading(false);
-      return { success: false, message: err.message || 'Unable to connect to authentication server.' };
-    }
-  };
-
-  // 2. Standard Email / Password Sign In
+  // 1. Email / Phone & Password Sign In
   const login = async (emailOrPhone: string, password?: string): Promise<AuthResponse> => {
     setIsLoading(true);
     try {
@@ -175,15 +145,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       setIsLoading(false);
-      return { success: false, message: res.message || 'Invalid credentials entered.' };
+      return { success: false, message: res.message || 'Invalid email or password.' };
     } catch (e: any) {
       setIsLoading(false);
       return { success: false, message: e.message || 'Login failed.' };
     }
   };
 
-  // 3. User Registration
-  const register = async (data: any): Promise<AuthResponse> => {
+  // 2. User Registration
+  const register = async (data: { name: string; email: string; phone?: string; password?: string; role: UserRole }): Promise<AuthResponse> => {
     setIsLoading(true);
     try {
       const res = await apiRequest('/auth/register', {
@@ -208,7 +178,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // 4. Sign Out
+  // 3. Sign Out
   const logout = () => {
     setUser(null);
     setToken(null);
@@ -222,12 +192,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         token,
         isLoading,
-        quickLogin,
         login,
         register,
         logout,
-        loginWithGoogle: () => quickLogin('FARMER'),
-        selectRole: (r: UserRole) => quickLogin(r),
       }}
     >
       {children}

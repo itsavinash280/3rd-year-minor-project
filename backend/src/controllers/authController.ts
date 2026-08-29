@@ -7,64 +7,64 @@ import { isMongoConnected } from '../config/db.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'asraverse_super_secret_jwt_key_2026_safe';
 
-// Default seeded profiles for quick role switching and instant access
-const DEFAULT_ROLE_PROFILES: Record<UserRole, { name: string; email: string; phone: string; avatar: string }> = {
-  FARMER: {
+// Default seeded accounts for direct email/password login
+const DEFAULT_ACCOUNTS: { name: string; email: string; phone: string; role: UserRole; avatar: string }[] = [
+  {
     name: 'Ramesh Kumar (किसान)',
     email: 'ramesh.farmer@asraverse.in',
     phone: '+91 98765 43210',
+    role: 'FARMER',
     avatar: 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=200&q=80',
   },
-  BUYER: {
-    name: 'Suresh Patel (थोक व्यापारी)',
+  {
+    name: 'Suresh Patel (थोक खरीदार)',
     email: 'suresh.buyer@asraverse.in',
     phone: '+91 98123 45678',
+    role: 'BUYER',
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
   },
-  EXPERT: {
-    name: 'Dr. Anita Sharma (KVK वैज्ञानिक)',
+  {
+    name: 'Dr. Anita Sharma (कृषि वैज्ञानिक)',
     email: 'dr.anita@asraverse.in',
     phone: '+91 97654 32109',
+    role: 'EXPERT',
     avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=200&q=80',
   },
-  TRANSPORT: {
-    name: 'Rajesh Verma (लॉजिस्टिक्स पार्टनर)',
+  {
+    name: 'Rajesh Verma (लॉजिस्टिक्स)',
     email: 'rajesh.transport@asraverse.in',
     phone: '+91 96543 21098',
+    role: 'TRANSPORT',
     avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80',
   },
-  ADMIN: {
-    name: 'AsraVerse Admin (प्रशासक)',
+  {
+    name: 'AsraVerse Administrator',
     email: 'admin@asraverse.in',
     phone: '+91 99999 00000',
+    role: 'ADMIN',
     avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
   },
-};
+];
 
-// Runtime in-memory user registry for environments without MongoDB / Vercel Serverless
+// Runtime in-memory user registry for environments without MongoDB
 export const inMemoryUsers: Map<string, any> = new Map();
 
 // Seed in-memory users on module initialization
-Object.entries(DEFAULT_ROLE_PROFILES).forEach(([role, profile]) => {
+DEFAULT_ACCOUNTS.forEach((account) => {
   const seededUser = {
-    _id: `seed-${role.toLowerCase()}`,
-    id: `seed-${role.toLowerCase()}`,
-    name: profile.name,
-    email: profile.email,
-    phone: profile.phone,
-    role: role as UserRole,
+    _id: `seed-${account.role.toLowerCase()}`,
+    id: `seed-${account.role.toLowerCase()}`,
+    name: account.name,
+    email: account.email.toLowerCase(),
+    phone: account.phone,
+    role: account.role,
     isVerified: true,
-    avatar: profile.avatar,
-    activeSessions: [
-      {
-        sessionId: `sess-${role.toLowerCase()}`,
-        deviceInfo: 'Standard Session',
-        lastActive: new Date(),
-      },
-    ],
+    avatar: account.avatar,
+    activeSessions: [],
     createdAt: new Date(),
   };
-  inMemoryUsers.set(profile.email.toLowerCase(), seededUser);
+  inMemoryUsers.set(account.email.toLowerCase(), seededUser);
+  inMemoryUsers.set(account.phone, seededUser);
   inMemoryUsers.set(seededUser.id, seededUser);
 });
 
@@ -100,100 +100,7 @@ export const generateToken = (user: any) => {
 };
 
 /**
- * 1. Quick Role Login / One-Click Authentication
- * Allows instant, friction-free login as any role (Farmer, Buyer, Expert, Transport, Admin)
- */
-export const quickRoleLogin = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { role, name, email } = req.body;
-    const targetRole = (role ? String(role).toUpperCase().trim() : 'FARMER') as UserRole;
-
-    const allowedRoles: UserRole[] = ['FARMER', 'BUYER', 'EXPERT', 'TRANSPORT', 'ADMIN'];
-    if (!allowedRoles.includes(targetRole)) {
-      res.status(400).json({
-        success: false,
-        message: `Invalid role requested. Allowed: ${allowedRoles.join(', ')}`,
-      });
-      return;
-    }
-
-    const defaultProfile = DEFAULT_ROLE_PROFILES[targetRole];
-    const userEmail = (email || defaultProfile.email).toLowerCase().trim();
-    const userName = name || defaultProfile.name;
-    const userPhone = defaultProfile.phone;
-    const userAvatar = defaultProfile.avatar;
-
-    let user: any = null;
-
-    if (isMongoConnected()) {
-      try {
-        user = await User.findOne({ email: userEmail });
-        if (!user) {
-          user = await User.create({
-            name: userName,
-            email: userEmail,
-            phone: userPhone,
-            role: targetRole,
-            isVerified: true,
-            avatar: userAvatar,
-            activeSessions: [
-              {
-                sessionId: `sess-${Date.now()}`,
-                deviceInfo: (req.headers['user-agent'] as string) || 'Web Browser',
-                lastActive: new Date(),
-              },
-            ],
-          });
-        }
-      } catch (dbErr) {
-        console.warn('[MongoDB Quick Login Notice]:', dbErr);
-      }
-    }
-
-    if (!user) {
-      user = getInMemoryUser(userEmail);
-      if (!user) {
-        user = {
-          _id: `user-${Date.now()}`,
-          id: `user-${Date.now()}`,
-          name: userName,
-          email: userEmail,
-          phone: userPhone,
-          role: targetRole,
-          isVerified: true,
-          avatar: userAvatar,
-          activeSessions: [],
-          createdAt: new Date(),
-        };
-        inMemoryUsers.set(userEmail, user);
-        inMemoryUsers.set(user.id, user);
-      }
-    }
-
-    const token = generateToken(user);
-
-    res.status(200).json({
-      success: true,
-      message: `Signed in successfully as ${user.name}`,
-      token,
-      user: {
-        id: user._id ? user._id.toString() : user.id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone || '',
-        role: user.role,
-        avatar: user.avatar,
-        isVerified: user.isVerified !== undefined ? user.isVerified : true,
-      },
-    });
-  } catch (error: any) {
-    console.error('[Quick Role Login Error]:', error);
-    res.status(500).json({ success: false, message: error.message || 'Quick login failed' });
-  }
-};
-
-/**
- * 2. Standard User Registration
+ * 1. User Registration (Email & Password)
  */
 export const registerUser = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -223,7 +130,6 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
     }
 
     const avatar =
-      DEFAULT_ROLE_PROFILES[normalizedRole]?.avatar ||
       'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80';
 
     let user: any = null;
@@ -298,7 +204,7 @@ export const registerUser = async (req: Request, res: Response): Promise<void> =
 };
 
 /**
- * 3. Standard Email / Password Login
+ * 2. User Sign In (Email / Phone & Password)
  */
 export const loginUser = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -324,11 +230,11 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
     }
 
     if (!user) {
-      res.status(401).json({ success: false, message: 'User not found with this email or phone number.' });
+      res.status(401).json({ success: false, message: 'User not found. Please check your email/phone or create an account.' });
       return;
     }
 
-    // If user has a set password, verify it
+    // If user has a password in DB, verify password hash
     if (user.password && password) {
       const isMatch = await bcrypt.compare(password, user.password).catch(() => false);
       if (!isMatch && password !== user.password) {
@@ -360,7 +266,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
 };
 
 /**
- * 4. Get Current Authenticated User Profile (/api/auth/me)
+ * 3. Get Current Authenticated User Profile (/api/auth/me)
  */
 export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
   if (!req.user) {
@@ -384,7 +290,7 @@ export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
 };
 
 /**
- * 5. Active Sessions List
+ * 4. Active Sessions List
  */
 export const getSessions = async (req: AuthRequest, res: Response): Promise<void> => {
   if (!req.user) {
@@ -395,7 +301,7 @@ export const getSessions = async (req: AuthRequest, res: Response): Promise<void
 };
 
 /**
- * 6. Revoke a Session
+ * 5. Revoke a Session
  */
 export const revokeSession = async (req: AuthRequest, res: Response): Promise<void> => {
   if (!req.user) {
@@ -413,12 +319,8 @@ export const revokeSession = async (req: AuthRequest, res: Response): Promise<vo
 };
 
 /**
- * 7. OTP Verification (Mock / Resilient)
+ * 6. OTP Verification (Mock / Resilient)
  */
 export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
   res.status(200).json({ success: true, message: 'OTP verified successfully.' });
 };
-
-// Aliases for compatibility
-export const googleAuth = quickRoleLogin;
-export const registerRole = quickRoleLogin;
